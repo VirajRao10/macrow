@@ -510,8 +510,8 @@ function renderAboutPanel(){
       <div class="policy__name">Links</div>
       <div class="policy__text" style="margin-top:8px;">
         LinkedIn: <a class="link" href="https://linkedin.com/in/virajrao1" target="_blank" rel="noopener">linkedin.com/in/virajrao1</a><br/>
-        Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a>
-        BuyMeACoffee: <a class="link" href="https://buymeacoffee.com/virajrao" target="_blank" rel="noopener">linkedin.com/in/virajrao1</a><br/>
+        Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a><br/>
+        BuyMeACoffee: <a class="link" href="https://buymeacoffee.com/virajrao" target="_blank" rel="noopener">https://buymeacoffee.com/virajrao</a><br/>
 
       </div>
     </div>
