@@ -1,0 +1,21 @@
+{
+  "name": "macrow",
+  "short_name": "macrow",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "description": "IB Keynesian AD–AS, simplified and interactive.",
+  "icons": [
+    {
+      "src": "./assets/macrow-logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/macrow-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

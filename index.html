@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>macrow</title>
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- iOS Home Screen icon (fixes the “M” placeholder) -->
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand__logo" src="./assets/macrow-logo.png" alt="macrow logo" />
+      <div>
+        <div class="brand__name">macrow</div>
+        <div class="brand__tag">IB Keynesian AD–AS, simplified and interactive</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="mainGrid">
+      <!-- Chart card -->
+      <div class="card chartCard">
+        <div class="cardHeader">
+          <div class="cardTitle">Keynesian AD–AS diagram (IB format)</div>
+          <div class="legend">
+            <div class="dot dot--ad"></div><div class="legendText">AD (demand)</div>
+            <div class="dot dot--as"></div><div class="legendText">AS (supply)</div>
+            <div class="dot dot--lras"></div><div class="legendText">LRAS (potential)</div>
+          </div>
+        </div>
+
+        <div class="chartWrap">
+          <svg id="chartSvg" viewBox="0 0 860 560" width="100%" height="100%" aria-label="Keynesian AD-AS chart"></svg>
+        </div>
+
+        <div class="underChart">
+          <div class="chipsRow">
+            <div id="changeChips" class="chips"></div>
+            <div id="gapLabel" class="stateLabel">State: —</div>
+          </div>
+
+          <!-- Shown only on Parameters tab -->
+          <div id="underGraphFormula" class="formulaBlock hidden">
+            <div class="formulaTitle">Aggregate Demand</div>
+            <div class="formulaEq">AD = C + I + G + (X − M)</div>
+          </div>
+
+          <!-- New: controls row -->
+          <div class="chartControls">
+            <label class="toggle">
+              <input id="toggleAxisNumbers" type="checkbox" checked />
+              <span>Show axis numbers</span>
+            </label>
+
+            <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
+          </div>
+
+          <div class="scenarioBtns">
+            <button id="btnMakeRecession" class="btn btn--ghost">Create recessionary gap</button>
+            <button id="btnMakeDemandPull" class="btn btn--ghost">Create demand-pull inflation</button>
+            <button id="btnClearGap" class="btn btn--ghost">Clear scenario</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side panel -->
+      <aside class="card sideCard">
+        <div class="sideHeader">
+          <div id="panelTitle" class="sideTitle">Policies</div>
+          <button id="btnReset" class="btn btn--ghost">Reset</button>
+        </div>
+
+        <div id="panelPolicies"></div>
+        <div id="panelParameters" class="hidden"></div>
+        <div id="panelAbout" class="hidden"></div>
+      </aside>
+    </section>
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="bottomNav" aria-label="Tabs">
+    <button class="navBtn navBtn--active" data-tab="policies">
+      <span class="navIcon">📘</span>
+      <span class="navText">Policies</span>
+    </button>
+    <button class="navBtn" data-tab="parameters">
+      <span class="navIcon">🎛️</span>
+      <span class="navText">Parameters</span>
+    </button>
+    <button class="navBtn" data-tab="about">
+      <span class="navIcon">ℹ️</span>
+      <span class="navText">About</span>
+    </button>
+  </nav>
+
+  <!-- Welcome modal (old-style) -->
+  <div id="welcomeOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
+      <div class="modalHeader">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <img
+            src="./assets/macrow-logo.png"
+            alt="macrow logo"
+            style="width:56px; height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.08); object-fit:cover;"
+          />
+          <div>
+            <div id="welcomeTitle" class="modalTitle">Welcome to macrow by Viraj!</div>
+            <div style="margin-top:2px; font-size:12px; color: rgba(148,163,184,0.75); font-weight:700;">
+              Simplified Macro(w)economic simulator for IB macroeconomic policy on the  Keynesian AD/AS diagram
+            </div>
+          </div>
+        </div>
+        <button id="welcomeClose" class="iconBtn" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modalBody">
+        <div class="callout">
+          macrow is designed to show a simplified version of macroeconomic events on the IB Keynesian AD–AS diagram.
+          Its purpose is to help IB students grasp these concepts so they can be applied effectively in exams.
+        </div>
+
+        <div class="modalSectionTitle">Add macrow to your Home Screen (further optimisation coming soon) </div>
+        <ol class="steps">
+          <li><b>iPhone (Safari):</b> Share → <b>Add to Home Screen</b>.</li>
+          <li><b>Android (Chrome):</b> Menu → <b>Install app</b> / <b>Add to Home screen</b>.</li>
+          <li>Open macrow from your Home Screen for a full-screen app-like layout.</li>
+          <li>Or access on Desktop at <a class="link" href="macrow.virajrao.com" target="_blank" rel="noopener">linkedin.com/in/virajrao1</a><br/>
+            .</li>
+
+        </ol>
+
+        <label class="checkRow">
+          <input id="welcomeDontShow" type="checkbox" />
+          <span>Don’t show this again</span>
+        </label>
+
+        <div class="modalFooter">
+          <button id="welcomeOk" class="btn btn--primary">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footerLeft">macrow is simplified for the IB syllabus by Viraj. Further individual exploration of these concepts is always recommended.</div>
+    <div class="footerRight">Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a></div>
+  </footer>
+
+  <script defer src="./app.js"></script>
+</body>
+</html>
