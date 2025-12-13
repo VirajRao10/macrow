@@ -1,4 +1,4 @@
-const CACHE = "macrow-v19";
+const CACHE = "macrow-v20";
 const ASSETS = [
   "./",
   "./index.html",
