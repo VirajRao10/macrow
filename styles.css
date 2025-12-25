@@ -1,3 +1,4 @@
+/* LIQUID GLASS, To-do: check with Apple guide to ensure opacities and shapes are correct! */
 :root{
   --bg0:#070b14;
   --bg1:#0b1220;
@@ -277,7 +278,6 @@ input[type="range"]{ width: 100%; }
 
 .hidden{ display:none !important; }
 
-/* Bottom nav (liquid glass) */
 .bottomNav{
   position: fixed;
   left: 12px;
@@ -394,12 +394,11 @@ input[type="range"]{ width: 100%; }
 }
 .footerRight{ white-space: nowrap; }
 
-/* Responsive */
 @media (max-width: 980px){
   .mainGrid{ grid-template-columns: 1fr; }
-  .chartCard{ position: static; } /* crucial: fixes scrolling on mobile */
+  .chartCard{ position: static; } 
   .chartWrap{
-    height: min(62vh, 460px); /* easier to see graph */
+    height: min(62vh, 460px); 
   }
   .footer{ flex-direction: column; align-items: flex-start; gap: 6px; }
   .footerRight{ white-space: normal; }
