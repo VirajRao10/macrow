@@ -1,9 +1,4 @@
-// macrow — IB Keynesian AD–AS
-// Fixes included:
-// - AD line is clipped to the plot box (removes “flat” kink caused by clamping).
-// - Export chart as PNG.
-// - Toggle axis numbers (persisted).
-// - Add LinkedIn link in About.
+// MACROW THE GOAT APP!!! :)))
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -11,7 +6,7 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// ---------------- Utilities ----------------
+// ---------------- Utilities (Functions) ----------------
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -30,24 +25,24 @@ function expEaseIn(t, k=6){
   return num / den;
 }
 
-// ---------------- Graph tuning ----------------
+// ---------------- Graph  Fixing ----------------
 const GRAPH = {
   Ymin: 40, Ymax: 180,
   Pmin: 20, Pmax: 120,
 
-  // AD: P = adIntercept - adSlope*(Y - (pivotY + shift))
+  // REMEBER: AD: P = adIntercept - adSlope*(Y - (pivotY + shift))
   adIntercept: 80,
   adSlope: 0.75,
   adPivotY: 120,
 
-  // Keynesian AS
+  //  AS (keynesian!)
   pFlat: 55,
   yFeBase: 120,
   kinkGap: 20,
   curveRise: 25
 };
 
-// ---------------- Defaults ----------------
+// ---------------- Start-up Setting for graph ----------------
 const defaults = {
   params: {
     govSpending: 50,
@@ -71,7 +66,7 @@ let state = {
   yFe: GRAPH.yFeBase
 };
 
-// ---------------- Parameter mapping ----------------
+// ---------------- Parameters ----------------
 function computeFromParams(p){
   const g = (p.govSpending - 50) * 0.60;
   const t = (25 - p.taxRate) * 0.90;
@@ -84,7 +79,7 @@ function computeFromParams(p){
   return { adShiftY, asShiftP, yFe };
 }
 
-// ---------------- AD functions ----------------
+// ---------------- AD  ----------------
 function AD(Y, adShiftY){
   const Y0 = GRAPH.adPivotY + adShiftY;
   return GRAPH.adIntercept - GRAPH.adSlope * (Y - Y0);
@@ -94,7 +89,7 @@ function invertAD_Y(P, adShiftY){
   return Y0 + (GRAPH.adIntercept - P) / GRAPH.adSlope;
 }
 
-// ---------------- Keynesian AS ----------------
+// ---------------- Keynesian AS 2 ----------------
 function ASshape({ asShiftP, yFe }){
   const pFlat = clamp(GRAPH.pFlat + asShiftP, GRAPH.Pmin + 6, GRAPH.Pmax - 40);
   const yKink = clamp(yFe - GRAPH.kinkGap, GRAPH.Ymin + 8, yFe - 10);
@@ -113,14 +108,14 @@ function ASshape({ asShiftP, yFe }){
     pts.push([y, p]);
   }
 
-  // perfectly vertical at Yf
+  // Perfectly inelastic portion of AS
   pts.push([yFe, pEnd]);
   pts.push([yFe, GRAPH.Pmax - 6]);
 
   return { pts, yKink, yFe, pFlat, pEnd };
 }
 
-// ---------------- Equilibrium ----------------
+// ---------------- Eq ----------------
 function equilibrium({ adShiftY, asShiftP, yFe }){
   const as = ASshape({ asShiftP, yFe });
 
@@ -163,8 +158,7 @@ function equilibrium({ adShiftY, asShiftP, yFe }){
   return { y: yFe, p: AD(yFe, adShiftY), mode: "vertical" };
 }
 
-// ---------------- Line clipping (removes AD “flat kink”) ----------------
-// Clip line P = mY + b to the box [Ymin,Ymax] x [Pmin,Pmax] in model coords.
+// CLine Clipping
 function clipLineToBox(m, b, box){
   const { Ymin, Ymax, Pmin, Pmax } = box;
   const pts = [];
@@ -190,7 +184,7 @@ function clipLineToBox(m, b, box){
     if (Y2 >= Ymin && Y2 <= Ymax) pts.push([Y2, Pmax]);
   }
 
-  // Deduplicate close points
+  // Fix close points
   const uniq = [];
   for (const p of pts){
     if (!uniq.some(q => Math.hypot(q[0]-p[0], q[1]-p[1]) < 1e-6)) uniq.push(p);
@@ -198,7 +192,7 @@ function clipLineToBox(m, b, box){
 
   if (uniq.length < 2) return null;
 
-  // Choose the two points farthest apart
+  // Choosing furthest points
   let best = [uniq[0], uniq[1]];
   let bestD = -1;
   for (let i=0;i<uniq.length;i++){
@@ -240,7 +234,7 @@ function setTab(tab){
   if (f) f.classList.toggle("hidden", tab !== "parameters");
 }
 
-// ---------------- Welcome modal ----------------
+// ---------------- Welcome Card (modal) ----------------
 function showWelcomeIfNeeded(){
   const key = "macrow_welcome_dismissed_v2";
   const dismissed = localStorage.getItem(key) === "1";
@@ -262,7 +256,7 @@ function showWelcomeIfNeeded(){
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); }, { once: true });
 }
 
-// ---------------- Policies (6 only) ----------------
+// ---------------- 6 Macro Policies ----------------
 const policyCards = [
   {
     id: "fiscal_exp",
@@ -449,7 +443,7 @@ function renderPoliciesPanel(){
   });
 }
 
-// ---------------- Parameters panel ----------------
+// ---------------- Parameters dump ----------------
 const paramDefs = [
   { key: "govSpending", label: "Government spending (G)", hint: "Higher G shifts AD right.", min: 0, max: 100, step: 1, format: (v) => `${v}` },
   { key: "taxRate", label: "Tax rate (T)", hint: "Higher T shifts AD left.", min: 0, max: 50, step: 1, format: (v) => `${v}%` },
@@ -495,7 +489,9 @@ function renderParametersPanel(){
   syncParamReadouts();
 }
 
-// ---------------- About panel (LinkedIn added) ----------------
+// ---------------- About panel (links - ) ----------------
+//To-do: Add an embed button for coffee and linkedn
+
 function renderAboutPanel(){
   const root = qs("#panelAbout");
   root.innerHTML = `
@@ -518,7 +514,7 @@ function renderAboutPanel(){
   `;
 }
 
-// ---------------- Readouts + reset ----------------
+// ---------------- Readouts and resetting ----------------
 function syncParamReadouts(){
   paramDefs.forEach(d => {
     const el = qs(`#val_${d.key}`);
@@ -558,7 +554,7 @@ if (axisToggle){
   });
 }
 
-// Export PNG
+// Exporting as PNG
 qs("#btnExportPng").addEventListener("click", () => exportChartPng());
 
 // ---------------- Main render pipeline ----------------
@@ -1017,7 +1013,7 @@ function miniArrow(svg, x1, y1, x2, y2, color){
   miniLine(svg, x2, y2, x2 + Math.cos(a2)*len, y2 + Math.sin(a2)*len, color, 2.8);
 }
 
-// ---------------- Init ----------------
+// ---------------- Init Function ---------------
 function init(){
   renderPoliciesPanel();
   renderParametersPanel();
