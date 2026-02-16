@@ -91,8 +91,12 @@ function invertAD_Y(P, adShiftY){
 
 // ---------------- Keynesian AS 2 ----------------
 function ASshape({ asShiftP, yFe }){
-  const pFlat = clamp(GRAPH.pFlat + asShiftP, GRAPH.Pmin + 6, GRAPH.Pmax - 40);
-  const yKink = clamp(yFe - GRAPH.kinkGap, GRAPH.Ymin + 8, yFe - 10);
+  // Cost-push: shift entire AS curve LEFT (reduce output at each price level)
+  // asShiftP is in price units; convert to output units for horizontal shift
+  const outputShift = asShiftP * 3; // Convert price shift to output shift
+  const shiftedYFe = clamp(yFe - outputShift, GRAPH.Ymin + 30, GRAPH.Ymax - 10);
+  const pFlat = GRAPH.pFlat; // Keep flat portion at same price level
+  const yKink = clamp(shiftedYFe - GRAPH.kinkGap, GRAPH.Ymin + 8, shiftedYFe - 10);
   const pEnd = clamp(pFlat + GRAPH.curveRise, GRAPH.Pmin + 10, GRAPH.Pmax - 10);
 
   const pts = [];
@@ -102,17 +106,17 @@ function ASshape({ asShiftP, yFe }){
   const steps = 60;
   for (let i = 1; i <= steps; i++){
     const t = i / steps;
-    const y = lerp(yKink, yFe, t);
+    const y = lerp(yKink, shiftedYFe, t);
     const e = expEaseIn(t, 6);
     const p = pFlat + e * (pEnd - pFlat);
     pts.push([y, p]);
   }
 
   // Perfectly inelastic portion of AS
-  pts.push([yFe, pEnd]);
-  pts.push([yFe, GRAPH.Pmax - 6]);
+  pts.push([shiftedYFe, pEnd]);
+  pts.push([shiftedYFe, GRAPH.Pmax - 6]);
 
-  return { pts, yKink, yFe, pFlat, pEnd };
+  return { pts, yKink, yFe: shiftedYFe, pFlat, pEnd };
 }
 
 // ---------------- Eq ----------------
@@ -375,8 +379,8 @@ const policyCards = [
   {
     id: "cost_push_info",
     name: "Cost-push inflation",
-    badge: { text: "AS ↑ up", kind: "as" },
-    definition: "Inflation caused by an increase in production costs (wages, raw materials, oil prices), shifting AS upward.",
+    badge: { text: "AS → left", kind: "as" },
+    definition: "Inflation caused by an increase in production costs (wages, raw materials, oil prices), shifting AS leftward.",
     useWhen: "Analyzing supply-side shocks like oil price spikes or wage increases.",
     apply: (p) => ({ ...p, productionCosts: clamp(p.productionCosts + 20, 0, 100) }),
     eval: [
@@ -397,7 +401,7 @@ function impactSentence(kind, txt){
   if (kind === "ad" && txt.includes("right")) return "Higher output (if below Yf) and upward pressure on prices.";
   if (kind === "ad" && txt.includes("left")) return "Lower inflation pressure, but output may fall in the short run.";
   if (kind === "cap") return "Higher potential output (Yf shifts right).";
-  if (kind === "as") return "Higher price level with lower real output (stagflation risk).";
+  if (kind === "as") return "Lower output at each price level; higher prices (stagflation risk).";
   return "Shifts the diagram in the expected direction.";
 }
 
@@ -468,7 +472,7 @@ const paramDefs = [
   { key: "govSpending", label: "Government spending (G)", hint: "Higher G shifts AD right.", min: 0, max: 100, step: 1, format: (v) => `${v}` },
   { key: "taxRate", label: "Tax rate (T)", hint: "Higher T shifts AD left.", min: 0, max: 50, step: 1, format: (v) => `${v}%` },
   { key: "interestRate", label: "Interest rate (i)", hint: "Lower i shifts AD right.", min: 0, max: 10, step: 0.1, format: (v) => `${v.toFixed(1)}%` },
-  { key: "productionCosts", label: "Production costs", hint: "Higher costs shift AS upward (cost-push).", min: 0, max: 100, step: 1, format: (v) => `${v}` },
+  { key: "productionCosts", label: "Production costs", hint: "Higher costs shift AS left (cost-push).", min: 0, max: 100, step: 1, format: (v) => `${v}` },
   { key: "productivity", label: "Productivity (capacity / Yf)", hint: "Shifts Yf and the vertical part left/right.", min: 0, max: 100, step: 1, format: (v) => `${v}` }
 ];
 
@@ -687,11 +691,11 @@ function renderStateAndChips(base, cur){
   const onFlat = eqCur.y <= (asCur.yKink + 1.5);
   const nearYf = Math.abs(eqCur.y - cur.yFe) <= epsY;
   
-  // Detect cost-push: high production costs with AS shifted up significantly
-  const isCostPush = cur.asShiftP > 10 && dP > 2;
+  // Detect cost-push: high production costs with AS shifted left significantly
+  const isCostPush = cur.asShiftP > 10 && cur.yFe < base.yFe - 5;
 
   if (isCostPush && !onFlat) {
-    gapRoot.textContent = "State: cost-push inflation (AS shifted up due to higher production costs)";
+    gapRoot.textContent = "State: cost-push inflation (AS shifted left due to higher production costs)";
     return;
   }
   if (onFlat) {
@@ -754,11 +758,11 @@ function renderMiniPolicy(svg, { caption, base, after, kind }){
   } else if (kind === "cap") {
     miniArrow(svg, xScale(base.yFe), pad.t + 16, xScale(after.yFe), pad.t + 16, "rgba(34,197,94,0.90)");
   } else if (kind === "as") {
-    // AS shift up (cost-push): show arrow pointing up on the AS curve
-    const Y = 90;
-    const pBase = asBase.pFlat;
-    const pAfter = asAfter.pFlat;
-    miniArrow(svg, xScale(Y), yScale(pBase), xScale(Y), yScale(pAfter), "rgba(59,130,246,0.95)");
+    // AS shift left (cost-push): show arrow pointing left on the AS curve
+    const P = 70;
+    const yBase = asBase.yFe;
+    const yAfter = asAfter.yFe;
+    miniArrow(svg, xScale(yBase), yScale(P), xScale(yAfter), yScale(P), "rgba(59,130,246,0.95)");
   }
 
   miniText(svg, 10, 18, caption, "start", "rgba(226,232,240,0.85)", 12, true);
