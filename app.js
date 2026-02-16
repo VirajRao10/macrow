@@ -371,6 +371,25 @@ const policyCards = [
       caption: "Increase potential output (Yf)",
       kind: "cap"
     })
+  },
+  {
+    id: "cost_push_info",
+    name: "Cost-push inflation",
+    badge: { text: "AS ↑ up", kind: "as" },
+    definition: "Inflation caused by an increase in production costs (wages, raw materials, oil prices), shifting AS upward.",
+    useWhen: "Analyzing supply-side shocks like oil price spikes or wage increases.",
+    apply: (p) => ({ ...p, productionCosts: clamp(p.productionCosts + 20, 0, 100) }),
+    eval: [
+      "Stagflation risk: higher prices with lower output.",
+      "Difficult to fix with demand-side policies alone.",
+      "May require supply-side policies or patience for self-correction."
+    ],
+    previewScenario: () => ({
+      params: { ...defaults.params, productionCosts: 50 },
+      after: (p) => ({ ...p, productionCosts: clamp(p.productionCosts + 25, 0, 100) }),
+      caption: "Cost-push shock",
+      kind: "as"
+    })
   }
 ];
 
@@ -378,6 +397,7 @@ function impactSentence(kind, txt){
   if (kind === "ad" && txt.includes("right")) return "Higher output (if below Yf) and upward pressure on prices.";
   if (kind === "ad" && txt.includes("left")) return "Lower inflation pressure, but output may fall in the short run.";
   if (kind === "cap") return "Higher potential output (Yf shifts right).";
+  if (kind === "as") return "Higher price level with lower real output (stagflation risk).";
   return "Shifts the diagram in the expected direction.";
 }
 
@@ -538,6 +558,10 @@ qs("#btnMakeDemandPull").addEventListener("click", () => {
   state.params = { ...state.params, govSpending: 85, taxRate: 10, interestRate: 1.0, productionCosts: 50, productivity: 50 };
   onParamsChanged();
 });
+qs("#btnMakeCostPush").addEventListener("click", () => {
+  state.params = { ...state.params, govSpending: 50, taxRate: 25, interestRate: 3.5, productionCosts: 85, productivity: 50 };
+  onParamsChanged();
+});
 qs("#btnClearGap").addEventListener("click", () => {
   state.params = deepCopy(defaults.params);
   onParamsChanged();
@@ -662,7 +686,14 @@ function renderStateAndChips(base, cur){
   const epsY = 2.0;
   const onFlat = eqCur.y <= (asCur.yKink + 1.5);
   const nearYf = Math.abs(eqCur.y - cur.yFe) <= epsY;
+  
+  // Detect cost-push: high production costs with AS shifted up significantly
+  const isCostPush = cur.asShiftP > 10 && dP > 2;
 
+  if (isCostPush && !onFlat) {
+    gapRoot.textContent = "State: cost-push inflation (AS shifted up due to higher production costs)";
+    return;
+  }
   if (onFlat) {
     gapRoot.textContent = "State: recessionary gap (output below Yf)";
     return;
@@ -722,6 +753,12 @@ function renderMiniPolicy(svg, { caption, base, after, kind }){
     miniArrow(svg, xScale(y1), yScale(P), xScale(y2), yScale(P), "rgba(239,68,68,0.95)");
   } else if (kind === "cap") {
     miniArrow(svg, xScale(base.yFe), pad.t + 16, xScale(after.yFe), pad.t + 16, "rgba(34,197,94,0.90)");
+  } else if (kind === "as") {
+    // AS shift up (cost-push): show arrow pointing up on the AS curve
+    const Y = 90;
+    const pBase = asBase.pFlat;
+    const pAfter = asAfter.pFlat;
+    miniArrow(svg, xScale(Y), yScale(pBase), xScale(Y), yScale(pAfter), "rgba(59,130,246,0.95)");
   }
 
   miniText(svg, 10, 18, caption, "start", "rgba(226,232,240,0.85)", 12, true);
