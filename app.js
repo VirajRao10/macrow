@@ -616,14 +616,14 @@ function renderMainChart(){
   yTicks.forEach(P => {
     line(svg, pad.l, yScale(P), W - pad.r, yScale(P), "rgba(148,163,184,0.10)", 1);
     if (settings.showAxisNumbers){
-      text(svg, pad.l - 10, yScale(P) + 4, String(P), "end", "rgba(148,163,184,0.70)", 12);
+      text(svg, pad.l - 10, yScale(P) + 4, String(P), "end", "rgba(148,163,184,0.70)", 11);
     }
   });
 
   xTicks.forEach(Y => {
     line(svg, xScale(Y), pad.t, xScale(Y), H - pad.b, "rgba(148,163,184,0.08)", 1);
     if (settings.showAxisNumbers){
-      text(svg, xScale(Y), H - pad.b + 22, String(Y), "middle", "rgba(148,163,184,0.70)", 12);
+      text(svg, xScale(Y), H - pad.b + 22, String(Y), "middle", "rgba(148,163,184,0.70)", 11);
     }
   });
 
@@ -632,8 +632,8 @@ function renderMainChart(){
   line(svg, pad.l, H - pad.b, W - pad.r, H - pad.b, "rgba(226,232,240,0.70)", 3);
 
   // Axis labels
-  text(svg, (pad.l + (W - pad.r)) / 2, H - 18, "Real GDP ($)", "middle", "rgba(226,232,240,0.92)", 15, true);
-  textRot(svg, 22, (pad.t + (H - pad.b))/2, "Average Price Level ($)", -90, "middle", "rgba(226,232,240,0.92)", 15, true);
+  text(svg, (pad.l + (W - pad.r)) / 2, H - 18, "Real GDP ($)", "middle", "rgba(226,232,240,0.92)", 13, true);
+  textRot(svg, 22, (pad.t + (H - pad.b))/2, "Average Price Level ($)", -90, "middle", "rgba(226,232,240,0.92)", 13, true);
 
   const base = computeFromParams(defaults.params);
   const cur  = { adShiftY: state.adShiftY, asShiftP: state.asShiftP, yFe: state.yFe };
@@ -765,7 +765,7 @@ function renderMiniPolicy(svg, { caption, base, after, kind }){
     miniArrow(svg, xScale(yBase), yScale(P), xScale(yAfter), yScale(P), "rgba(59,130,246,0.95)");
   }
 
-  miniText(svg, 10, 18, caption, "start", "rgba(226,232,240,0.85)", 12, true);
+  miniText(svg, 10, 18, caption, "start", "rgba(226,232,240,0.85)", 11, true);
 }
 
 // ---------------- Shift arrows ----------------
@@ -947,9 +947,9 @@ function pathFromPixelPoints(pts){
 }
 
 function boxedLabel(svg, x, y, label, color){
-  const paddingX = 10, paddingY = 7;
-  const fontSize = 13;
-  const approxW = Math.max(36, label.length * 7.2);
+  const paddingX = 8, paddingY = 6;
+  const fontSize = 12;
+  const approxW = Math.max(32, label.length * 6.5);
   const w = approxW + paddingX * 2;
   const h = fontSize + paddingY * 2;
   const rx = 12;
