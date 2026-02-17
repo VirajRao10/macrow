@@ -11,14 +11,25 @@ const KEYBOARD_SHORTCUTS=[
 const LEARN_TIPS=[
   "AD shifts right usually raise real output and the price level in the short run.",
   "AS shifts left (cost-push shock) create inflation with weaker growth.",
-  "LRAS shifts right raise potential output and reduce inflationary pressure over time.",
-  "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs."
+  "The Yf marker shows potential output at the Keynesian AS kink in this view.",
+  "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
+  "For top-band answers, add assumptions (confidence, spare capacity, policy lag, external shocks)."
 ];
 const LEARN_MODULES=[
   {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
   {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
+  {title:"Classroom investigation template",points:["Set a starting state and ask students to predict P/Y before moving any slider.","Apply one policy, then require annotation of what shifted and why.","Compare short-run gains against inflation or unemployment trade-offs.","Finish with a 2–3 sentence evaluation using assumptions and limits."]},
   {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
 ];
+const CLASSROOM_INVESTIGATIONS=[
+  "A central bank is worried about persistent inflation and weak credibility.",
+  "Consumer confidence has fallen after external uncertainty, reducing private spending.",
+  "Government announces an infrastructure package to support growth and jobs.",
+  "Energy and shipping costs surge, pushing up firms’ production costs.",
+  "A productivity boom follows digital adoption and labour upskilling.",
+  "A tax increase is introduced to reduce a widening budget deficit."
+];
+
 const GLOSSARY=[
   {term:"Aggregate Demand (AD)",blurb:"Total planned spending at each price level: C + I + G + (X − M). AD shifts right when spending conditions improve."},
   {term:"Aggregate Supply (AS)",blurb:"Short-run total output producers are willing to supply. It can shift left after cost shocks and right after cost reductions."},
@@ -97,12 +108,66 @@ function renderLearnPanel(){
     <div class="sectionTitle">IB Learn mode</div>
     <div class="sectionHint">Structured for Paper 1/2 AD–AS explanations and strong evaluation chains.</div>
     ${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}
+
+    <div class="sectionTitle">Classroom investigations</div>
+    <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
+        <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
+        <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
+      </div>
+      <textarea id="learnInvestigationText" class="textInput learnTextarea" rows="7" aria-label="Classroom investigation brief"></textarea>
+      <div class="policy__text">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
+    </div>
+
+    <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
+
     <div class="sectionTitle">Core revision modules</div>
     ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
     <div class="sectionTitle">IB Macro glossary</div>
     <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
     ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
+
+  const txt=qs('#learnInvestigationText');
+  txt.value=buildInvestigationBrief();
+  qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
+  qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
+  qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
+  updateLearnSnapshot();
 }
+
+function buildInvestigationBrief(){
+  const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe};
+  const eq=equilibrium(cur);
+  const caseLine=CLASSROOM_INVESTIGATIONS[Math.floor(Math.random()*CLASSROOM_INVESTIGATIONS.length)];
+  const policy=policyCards[Math.floor(Math.random()*policyCards.length)];
+  return [
+    'Investigation brief (IB Macro — AD/AS)',
+    `Scenario: ${caseLine}`,
+    `Assigned policy lens: ${policy.name}.`,
+    '',
+    'Student tasks:',
+    '1) Predict whether AD or AS shifts and justify with one transmission channel.',
+    '2) Draw/annotate the initial and new equilibrium (P and Y).',
+    '3) Write a 4-sentence evaluation: short run, long run, a trade-off, and a policy limit.',
+    '',
+    `Current model anchor: Y=${eq.y.toFixed(1)}, P=${eq.p.toFixed(1)}.`
+  ].join('\\n');
+}
+
+function updateLearnSnapshot(){
+  const host=qs('#learnSnapshot');
+  if(!host) return;
+  const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe};
+  const eq=equilibrium(cur);
+  const outputGap=eq.y-cur.yFe;
+  host.innerHTML=`
+    <div class="policy__name">Live classroom snapshot</div>
+    <div class="policy__text">Y = <b>${eq.y.toFixed(1)}</b>, P = <b>${eq.p.toFixed(1)}</b>, Yf = <b>${cur.yFe.toFixed(1)}</b>, output gap = <b>${outputGap>0?'+':''}${outputGap.toFixed(1)}</b>.</div>
+    <div class="policy__text">Sentence starter: <i>The policy shifts ${state.adShiftY>=0?'AD':'AS'} ${state.adShiftY>=0?'right/left depending on demand conditions':'through production-cost conditions'}, so equilibrium output and price level change because...</i></div>`;
+}
+
 function renderAboutPanel(){
   qs('#panelAbout').innerHTML=`
     <div class="sectionTitle">About macrow</div>
@@ -142,7 +207,7 @@ function queueRender(){
   pendingRender=true;
   requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
 }
-function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); queueRender(); if(pushHistory) pushPolicyHistory();}
+function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); updateLearnSnapshot(); queueRender(); if(pushHistory) pushPolicyHistory();}
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
@@ -153,7 +218,15 @@ drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true); drawCurveSet(svg,x,y,c
 drawEquilibriumGuides(svg,x,y,equilibrium(base),equilibrium(cur),pad,H);
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
-function drawCurveSet(svg,x,y,v,tint,muted=false,dash){drawLRAS(svg,x,v.yFe,20,482,tint||'rgba(34,197,94,0.70)',dash||'6 6'); const ad=adLineSegment(v.adShiftY).seg; if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash); const as=ASshape(v); strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash); labelOnAD(svg,x,y,v.adShiftY,tint); labelOnAS(svg,x,y,as,tint); labelOnLRAS(svg,x,v.yFe,tint);}
+function drawCurveSet(svg,x,y,v,tint,muted=false,dash){
+  const ad=adLineSegment(v.adShiftY).seg;
+  if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash);
+  const as=ASshape(v);
+  strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash);
+  const adLabel=labelOnAD(svg,x,y,v.adShiftY,tint);
+  const yfLabel=drawYfPoint(svg,x,y,as,tint,muted,dash);
+  labelOnAS(svg,x,y,as,tint,adLabel,yfLabel);
+}
 function renderState(base,cur){
   const b=equilibrium(base),c=equilibrium(cur),dY=c.y-b.y,dP=c.p-b.p,dYf=cur.yFe-base.yFe;
   const num=v=>Number(v).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
@@ -170,7 +243,45 @@ function renderState(base,cur){
 }
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
-function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const items=[{label:'AD',text:'Aggregate Demand: C + I + G + (X−M)',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'AS',text:'Short-run Aggregate Supply',x:ASshape(cur).yKink+8,y:60},{label:'LRAS',text:'Long-run potential output (Yf)',x:cur.yFe,y:95},{label:'X axis',text:'Real output (GDP)',x:120,y:22},{label:'Y axis',text:'Average price level',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r',8); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'AD',text:'Aggregate Demand: C + I + G + (X−M)',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'AS',text:'Short-run Aggregate Supply',x:as.yKink+8,y:60},{label:'Yf',text:'Potential output marker at the Keynesian AS kink',x:as.yKink,y:as.pFlat},{label:'X axis',text:'Real output (GDP)',x:120,y:22},{label:'Y axis',text:'Average price level',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','9'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+
+function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
+  const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
+  const yGap=Math.abs(x(baseEq.y)-x(curEq.y));
+  const axisLabel=(cx,cy,label,stroke)=>{
+    const w=34,h=20;
+    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    [['x',cx-w/2],['y',cy-h/2],['width',w],['height',h],['rx',9],['fill','rgba(11,18,32,0.85)'],['stroke',stroke],['stroke-width','1.5']].forEach(([k,v])=>bg.setAttribute(k,v));
+    svg.appendChild(bg);
+    text(svg,cx,cy+4,label,'middle','rgba(241,245,249,0.96)',12,true);
+  };
+  const drawPoint=(pt,tag,color)=>{
+    line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
+    line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
+    point(svg,x(pt.y),y(pt.p),5,color);
+
+    const pBaseOffset=tag==='1'?-12:12;
+    const pOffset=pGap<24?pBaseOffset:(tag==='1'?-2:2);
+    axisLabel(pad.l-30,y(pt.p)+pOffset,`P${tag}`,color);
+
+    const yBaseOffset=tag==='1'?-22:22;
+    const yOffset=yGap<34?yBaseOffset:0;
+    axisLabel(x(pt.y)+yOffset,H-pad.b+36,`Y${tag}`,color);
+  };
+
+  const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
+  drawPoint(baseEq,'1',baseColor);
+  drawPoint(curEq,'2',curColor);
+
+  if(Math.abs(curEq.p-baseEq.p)>0.5){
+    line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
+    text(svg,pad.l-60,(y(baseEq.p)+y(curEq.p))/2+4,'P1 → P2','end','rgba(244,114,182,0.95)',12,true);
+  }
+  if(Math.abs(curEq.y-baseEq.y)>0.5){
+    line(svg,x(baseEq.y),H-pad.b+50,x(curEq.y),H-pad.b+50,'rgba(56,189,248,0.95)',2.1);
+    text(svg,(x(baseEq.y)+x(curEq.y))/2,H-pad.b+69,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
+  }
+}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   const drawPoint=(pt,tag,color)=>{
@@ -331,9 +442,13 @@ function textRot(svg,x,y,s,d,a,f,z,b=false){const el=document.createElementNS('h
 function strokePath(svg,d,s,w,da){const el=document.createElementNS('http://www.w3.org/2000/svg','path'); [['d',d],['fill','none'],['stroke',s],['stroke-width',w],['stroke-linecap','round'],['stroke-linejoin','round']].forEach(([k,v])=>el.setAttribute(k,v)); if(da)el.setAttribute('stroke-dasharray',da); svg.appendChild(el);} 
 function point(svg,cx,cy,r,fill){const el=document.createElementNS('http://www.w3.org/2000/svg','circle'); [['cx',cx],['cy',cy],['r',r],['fill',fill],['stroke','rgba(15,23,42,0.75)'],['stroke-width','1.5']].forEach(([k,v])=>el.setAttribute(k,v)); svg.appendChild(el);} 
 function pathFromPoints(x,y,pts){return `M ${pts.map(([Y,P])=>`${x(Y).toFixed(1)} ${y(P).toFixed(1)}`).join(' L ')}`;} function pathFromSegment(x,y,s){return `M ${x(s[0][0]).toFixed(1)} ${y(s[0][1]).toFixed(1)} L ${x(s[1][0]).toFixed(1)} ${y(s[1][1]).toFixed(1)}`;}
-function boxedLabel(svg,x,y,label,color){const w=Math.max(36,label.length*7.2)+20,h=27,bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); [['x',x-w/2],['y',y-h/2],['width',w],['height',h],['rx',12],['fill','rgba(11,18,32,0.7)'],['stroke',color||'rgba(255,255,255,.8)'],['stroke-width','2']].forEach(([k,v])=>bg.setAttribute(k,v)); svg.appendChild(bg); text(svg,x,y+4,label,'middle','rgba(226,232,240,0.95)',13,true);} 
-function drawLRAS(svg,x,yFe,t,b,s,d){line(svg,x(yFe),t,x(yFe),b,s,3.5,d);} function labelOnLRAS(svg,x,yFe,c){boxedLabel(svg,x(yFe)+54,72,'LRAS',c||'rgba(34,197,94,.9)');} function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return; const Y=lerp(seg[0][0],seg[1][0],.72),P=lerp(seg[0][1],seg[1][1],.72); boxedLabel(svg,x(Y)+20,y(P)-20,'AD',c||'rgba(239,68,68,.95)');} function labelOnAS(svg,x,y,as,c){boxedLabel(svg,x(as.yKink+10)+44,y(as.pFlat+5)-18,'AS',c||'rgba(59,130,246,.95)');}
+function boxedLabel(svg,x,y,label,color,opt={}){const w=Math.max(40,label.length*7.1)+20,h=28,bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); const fill=opt.fill||'rgba(6,11,22,0.88)'; [['x',x-w/2],['y',y-h/2],['width',w],['height',h],['rx',13],['fill',fill],['stroke',color||'rgba(148,163,184,.9)'],['stroke-width','1.7']].forEach(([k,v])=>bg.setAttribute(k,v)); svg.appendChild(bg); text(svg,x,y+4,label,'middle','rgba(241,245,249,0.98)',12.5,true); return {x,y,w,h};}
+function clampLabelPos(pos,box,pad=18){return {x:clamp(pos.x,box.left+pad,box.right-pad),y:clamp(pos.y,box.top+pad,box.bottom-pad)};}
+function labelsOverlap(a,b){if(!a||!b) return false; return Math.abs(a.x-b.x)<((a.w+b.w)/2+10)&&Math.abs(a.y-b.y)<((a.h+b.h)/2+8);}
+function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yKink),py=y(as.pFlat),stroke=c||'rgba(34,197,94,.9)'; if(dash){line(svg,px,py,px+28,py,stroke,1.4,dash);} point(svg,px,py,muted?4.5:5.5,stroke); const yfPos=clampLabelPos({x:px+48,y:py-20},{left:84,right:832,top:22,bottom:482},20); return boxedLabel(svg,yfPos.x,yfPos.y,'Yf',stroke,{fill:'rgba(5,15,11,0.88)'});}
+function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
+function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v2'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=()=>{if(qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true');}; qs('#welcomeClose').onclick=close; qs('#welcomeOk').onclick=close;}
+function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=()=>{if(qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true');}; qs('#welcomeClose').onclick=close; qs('#welcomeOk').onclick=close;}
 
 function init(){document.body.classList.toggle('accessibility-mode',settings.accessibility); renderPoliciesPanel(); renderParametersPanel(); renderLearnPanel(); renderAboutPanel(); initScenarioManager(); setTab('policies'); showWelcomeIfNeeded(); applyScenarioFromUrl(); onParamsChanged(true);} init();
