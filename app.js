@@ -66,6 +66,36 @@ let state = {
   yFe: GRAPH.yFeBase
 };
 
+const SCENARIO_STORAGE_KEY = "macrow_saved_scenarios_v1";
+const MAX_SCENARIOS = 6;
+
+const GLOSSARY = [
+  {
+    term: "Aggregate Demand (AD)",
+    definition: "AD = C + I + G + (X − M). It slopes downward because higher prices reduce spending."
+  },
+  {
+    term: "Keynesian Aggregate Supply (AS)",
+    definition: "AS starts flat then bends upward, showing how firms respond before hitting capacity.",
+    hint: "Mention the Keynesian zone in exam answers for AD/AS problems."
+  },
+  {
+    term: "Long-run Aggregate Supply (LRAS)",
+    definition: "Vertical at potential output (Yf), the level of full employment where prices no longer move output.",
+    hint: "LRAS reflects capacity constraints and the economy's underlying productive potential."
+  },
+  {
+    term: "Policy gaps",
+    definition: "Recessionary gaps show AD left of LRAS, demand-pull inflation happens when AD pushes the vertical AS, and cost-push shifts AS left."
+  }
+];
+
+const LEARN_TIPS = [
+  "Describe the policy, gap, and impact on output/prices in a single sentence for exam clarity.",
+  "Pair each intervention with a real-world example to boost the credibility of your analysis.",
+  "Save and share your favorite scenarios before study sessions so you can revisit the reasoning quickly."
+];
+
 // ---------------- Parameters ----------------
 function computeFromParams(p){
   const g = (p.govSpending - 50) * 0.60;
@@ -518,6 +548,21 @@ function renderParametersPanel(){
 
 function renderAboutPanel(){
   const root = qs("#panelAbout");
+  const glossaryHtml = GLOSSARY.map((item) => `
+    <details class="glossary__item">
+      <summary>${escapeHtml(item.term)}</summary>
+      <p>${escapeHtml(item.definition)}</p>
+      ${item.hint ? `<p class="glossary__hint">${escapeHtml(item.hint)}</p>` : ""}
+    </details>
+  `).join("");
+
+  const tipsHtml = LEARN_TIPS.map((tip, index) => `
+    <div class="learnTips__item">
+      <span>TIP ${index + 1}</span>
+      <div>${escapeHtml(tip)}</div>
+    </div>
+  `).join("");
+
   root.innerHTML = `
     <div>
       <div class="sectionTitle">About macrow</div>
@@ -532,12 +577,21 @@ function renderAboutPanel(){
         LinkedIn: <a class="link" href="https://linkedin.com/in/virajrao1" target="_blank" rel="noopener">linkedin.com/in/virajrao1</a><br/>
         Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a><br/>
         BuyMeACoffee: <a class="link" href="https://buymeacoffee.com/virajrao" target="_blank" rel="noopener">https://buymeacoffee.com/virajrao</a><br/>
+      </div>
+    </div>
 
+    <div class="learnBlock">
+      <div class="sectionTitle">Learning hub</div>
+      <div class="learnBlock__intro">Tap a term to refresh the theory before you dive into policy comparisons.</div>
+      <div class="glossary">
+        ${glossaryHtml}
+      </div>
+      <div class="learnTips">
+        ${tipsHtml}
       </div>
     </div>
   `;
 }
-
 // ---------------- Readouts and resetting ----------------
 function syncParamReadouts(){
   paramDefs.forEach(d => {
@@ -571,6 +625,23 @@ qs("#btnClearGap").addEventListener("click", () => {
   onParamsChanged();
 });
 
+const scenarioNameInput = qs("#scenarioNameInput");
+const scenarioSaveButton = qs("#btnSaveScenario");
+const scenarioListRoot = qs("#scenarioList");
+const scenarioShareButton = qs("#btnShareScenario");
+
+let scenarioStatusTimer = null;
+
+if (scenarioSaveButton) scenarioSaveButton.addEventListener("click", handleSaveScenario);
+scenarioNameInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSaveScenario();
+  }
+});
+scenarioListRoot?.addEventListener("click", handleScenarioListClick);
+scenarioShareButton?.addEventListener("click", () => shareCurrentScenario(scenarioShareButton));
+
 // Axis numbers toggle
 const axisToggle = qs("#toggleAxisNumbers");
 if (axisToggle){
@@ -594,6 +665,7 @@ function onParamsChanged(){
 
   syncParamReadouts();
   renderMainChart();
+  updateScenarioUrl();
 }
 
 // ---------------- Chart rendering ----------------
@@ -687,27 +759,46 @@ function renderStateAndChips(base, cur){
   chipRoot.appendChild(chip(dY, "Output"));
   chipRoot.appendChild(chip(dP, "Prices"));
 
-  const epsY = 2.0;
-  const onFlat = eqCur.y <= (asCur.yKink + 1.5);
-  const nearYf = Math.abs(eqCur.y - cur.yFe) <= epsY;
-  
-  // Detect cost-push: high production costs with AS shifted left significantly
-  const isCostPush = cur.asShiftP > 10 && cur.yFe < base.yFe - 5;
+  const stateDesc = getStateDescription(cur);
+  gapRoot.textContent = `State: ${stateDesc.detail}`;
+}
 
-  if (isCostPush && !onFlat) {
-    gapRoot.textContent = "State: cost-push inflation (AS shifted left due to higher production costs)";
-    return;
+function getStateDescription(cur){
+  const base = computeFromParams(defaults.params);
+  const asCur = ASshape({ asShiftP: cur.asShiftP, yFe: cur.yFe });
+  const eqCur = equilibrium(cur);
+  const onFlat = eqCur.y <= (asCur.yKink + 1.5);
+  const nearYf = Math.abs(eqCur.y - cur.yFe) <= 2.0;
+  const isCostPush = cur.asShiftP > 10 && cur.yFe < base.yFe - 5 && !onFlat;
+
+  if (isCostPush) {
+    return {
+      label: "Cost-push inflation",
+      detail: "cost-push inflation (AS shifted left due to higher production costs)"
+    };
   }
   if (onFlat) {
-    gapRoot.textContent = "State: recessionary gap (output below Yf)";
-    return;
+    return {
+      label: "Recessionary gap",
+      detail: "recessionary gap (output below Yf)"
+    };
   }
   if (nearYf) {
-    if (eqCur.p > asCur.pEnd + 2) gapRoot.textContent = "State: demand-pull inflation (up the vertical Keynesian AS)";
-    else gapRoot.textContent = "State: full employment (at Yf)";
-    return;
+    if (eqCur.p > asCur.pEnd + 2) {
+      return {
+        label: "Demand-pull inflation",
+        detail: "demand-pull inflation (up the vertical Keynesian AS)"
+      };
+    }
+    return {
+      label: "Full employment",
+      detail: "full employment (at Yf)"
+    };
   }
-  gapRoot.textContent = "State: approaching full employment";
+  return {
+    label: "Approaching full employment",
+    detail: "approaching full employment"
+  };
 }
 
 function chip(delta, label){
@@ -866,6 +957,217 @@ async function exportChartPng(){
   a.remove();
 }
 
+
+function renderScenarioManager(){
+  const root = qs("#scenarioList");
+  if (!root) return;
+  const saved = getSavedScenarios();
+  if (!saved.length){
+    root.innerHTML = `
+      <li class="scenarioManager__item scenarioManager__empty">
+        <div class="scenarioManager__itemName">No saved scenarios yet</div>
+        <div class="scenarioManager__itemMeta">Save a setup to revisit or share later.</div>
+      </li>
+    `;
+    return;
+  }
+  root.innerHTML = saved.map((entry, index) => `
+    <li class="scenarioManager__item">
+      <button type="button" class="scenarioManager__itemLoad" data-load="${index}">
+        <span class="scenarioManager__itemName">${escapeHtml(entry.name)}</span>
+        <span class="scenarioManager__itemMeta">${escapeHtml(formatScenarioMeta(entry.params))}</span>
+      </button>
+      <div class="scenarioManager__itemActions">
+        <button type="button" class="btn btn--ghost" data-share="${index}">Share</button>
+        <button type="button" class="btn btn--ghost" data-delete="${index}">Delete</button>
+      </div>
+    </li>
+  `).join("");
+}
+
+function handleSaveScenario(){
+  if (!scenarioNameInput) return;
+  const raw = scenarioNameInput.value.trim();
+  const label = raw.replace(/[<>]/g, "");
+  if (!label){
+    showScenarioManagerStatus("Name is required.", "error");
+    return;
+  }
+  const saved = getSavedScenarios();
+  const timestamp = Date.now();
+  const entry = { name: label, params: deepCopy(state.params), timestamp };
+  const existing = saved.findIndex((s) => s.name.toLowerCase() === label.toLowerCase());
+  if (existing >= 0) saved.splice(existing, 1);
+  saved.unshift(entry);
+  if (saved.length > MAX_SCENARIOS) saved.pop();
+  persistSavedScenarios(saved);
+  renderScenarioManager();
+  scenarioNameInput.value = "";
+  showScenarioManagerStatus(`Saved “${label}”.`, "success");
+}
+
+function handleScenarioListClick(event){
+  const loadBtn = event.target.closest("[data-load]");
+  if (loadBtn){
+    const idx = Number(loadBtn.dataset.load);
+    const saved = getSavedScenarios();
+    const entry = saved[idx];
+    if (!entry) return;
+    state.params = deepCopy(entry.params);
+    onParamsChanged();
+    showScenarioManagerStatus(`Loaded “${entry.name}”.`, "success");
+    return;
+  }
+  const shareBtn = event.target.closest("[data-share]");
+  if (shareBtn){
+    const idx = Number(shareBtn.dataset.share);
+    const saved = getSavedScenarios();
+    const entry = saved[idx];
+    if (!entry) return;
+    event.stopPropagation();
+    shareScenarioUrl(makeScenarioUrl(entry.params), `macrow scenario • ${entry.name}`, shareBtn);
+    return;
+  }
+  const deleteBtn = event.target.closest("[data-delete]");
+  if (deleteBtn){
+    const idx = Number(deleteBtn.dataset.delete);
+    const saved = getSavedScenarios();
+    const entry = saved[idx];
+    if (!entry) return;
+    saved.splice(idx, 1);
+    persistSavedScenarios(saved);
+    renderScenarioManager();
+    showScenarioManagerStatus(`Deleted “${entry.name}”.`);
+  }
+}
+
+function showScenarioManagerStatus(message = "", tone = ""){
+  const el = qs("#scenarioManagerStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("scenarioManager__status--success", tone === "success");
+  el.classList.toggle("scenarioManager__status--error", tone === "error");
+  if (scenarioStatusTimer){
+    clearTimeout(scenarioStatusTimer);
+    scenarioStatusTimer = null;
+  }
+  if (message){
+    scenarioStatusTimer = window.setTimeout(() => showScenarioManagerStatus(""), 4200);
+  }
+}
+
+function getSavedScenarios(){
+  try{
+    const raw = localStorage.getItem(SCENARIO_STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return data.sort((a, b) => b.timestamp - a.timestamp);
+  }catch(err){
+    console.error("Failed to read scenarios", err);
+    localStorage.removeItem(SCENARIO_STORAGE_KEY);
+    return [];
+  }
+}
+
+function persistSavedScenarios(list){
+  try{
+    localStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(list));
+  }catch(err){
+    console.error("Failed to store scenarios", err);
+  }
+}
+
+function formatScenarioMeta(params){
+  const stateDesc = getStateDescription(computeFromParams(params));
+  const interest = Number(params.interestRate).toFixed(1);
+  return `State: ${stateDesc.label} · G:${params.govSpending} · T:${params.taxRate} · i:${interest} · PC:${params.productionCosts} · Prod:${params.productivity}`;
+}
+
+async function shareCurrentScenario(button){
+  const currentDesc = getStateDescription(computeFromParams(state.params));
+  await shareScenarioUrl(makeScenarioUrl(state.params), `macrow scenario • ${currentDesc.label}`, button);
+}
+
+async function shareScenarioUrl(url, label, button){
+  try{
+    if (navigator.share){
+      try{
+        await navigator.share({ title: "macrow scenario", text: label, url });
+        flashButtonLabel(button, "Shared!");
+        showScenarioManagerStatus("Shared via device picker", "success");
+        return;
+      }catch(err){
+        console.info("Native share unavailable", err);
+      }
+    }
+    await copyTextToClipboard(url);
+    flashButtonLabel(button, "Link copied!");
+    showScenarioManagerStatus("Share link copied to clipboard", "success");
+  }catch(err){
+    console.error("Sharing failed", err);
+    showScenarioManagerStatus("Unable to copy the link", "error");
+  }
+}
+
+function flashButtonLabel(button, message, duration = 1400){
+  if (!button) return;
+  const original = button.textContent;
+  button.textContent = message;
+  button.disabled = true;
+  setTimeout(() => {
+    button.textContent = original;
+    button.disabled = false;
+  }, duration);
+}
+
+async function copyTextToClipboard(text){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+function makeScenarioUrl(params){
+  const url = new URL(window.location.href);
+  const query = new URLSearchParams();
+  paramDefs.forEach((def) => query.set(def.key, params[def.key]));
+  url.search = query.toString();
+  return url.toString();
+}
+
+function loadScenarioFromUrl(){
+  const params = new URLSearchParams(window.location.search);
+  let applied = false;
+  const overrides = {};
+  paramDefs.forEach((def) => {
+    if (params.has(def.key)){
+      const value = Number(params.get(def.key));
+      if (!Number.isNaN(value)){
+        overrides[def.key] = clamp(value, def.min, def.max);
+        applied = true;
+      }
+    }
+  });
+  if (applied){
+    state.params = { ...state.params, ...overrides };
+  }
+  return applied;
+}
+
+function updateScenarioUrl(){
+  const url = new URL(window.location.href);
+  const query = new URLSearchParams();
+  paramDefs.forEach((def) => query.set(def.key, state.params[def.key]));
+  url.search = query.toString();
+  window.history.replaceState(null, "", url.toString());
+}
 // ---------------- SVG helpers ----------------
 function rect(svg, x, y, w, h, r, fill){
   const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -1056,16 +1358,19 @@ function miniArrow(svg, x1, y1, x2, y2, color){
 
 // ---------------- Init Function ---------------
 function init(){
+  state.params = deepCopy(defaults.params);
+  const loadedFromLink = loadScenarioFromUrl();
+
   renderPoliciesPanel();
   renderParametersPanel();
   renderAboutPanel();
+  renderScenarioManager();
 
   setTab("policies");
   showWelcomeIfNeeded();
 
-  // Default at Yf
-  state.params = deepCopy(defaults.params);
   onParamsChanged();
-}
 
+  if (loadedFromLink) showScenarioManagerStatus("Loaded scenario from shared link", "success");
+}
 init();

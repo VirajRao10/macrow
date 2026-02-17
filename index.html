@@ -67,7 +67,10 @@
               <span>Show axis numbers</span>
             </label>
 
-            <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
+            <div class="chartControls__actions">
+              <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
+              <button id="btnShareScenario" class="btn btn--ghost">Share scenario</button>
+            </div>
           </div>
 
           <div class="scenarioBtns">
@@ -84,6 +87,21 @@
         <div class="sideHeader">
           <div id="panelTitle" class="sideTitle">Policies</div>
           <button id="btnReset" class="btn btn--ghost">Reset</button>
+        </div>
+
+        <div id="scenarioManager" class="scenarioManager">
+          <div class="scenarioManager__header">
+            <div>
+              <div class="scenarioManager__title">Scenario manager</div>
+              <div class="scenarioManager__hint">Save up to 6 custom setups and share them instantly.</div>
+            </div>
+          </div>
+          <div class="scenarioManager__form">
+            <input id="scenarioNameInput" type="text" class="scenarioManager__input" maxlength="42" placeholder="Name this scenario (e.g., “Demand pull fix”)" />
+            <button id="btnSaveScenario" class="btn btn--primary">Save current scenario</button>
+          </div>
+          <div id="scenarioManagerStatus" class="scenarioManager__status"></div>
+          <ul id="scenarioList" class="scenarioManager__list"></ul>
         </div>
 
         <div id="panelPolicies"></div>

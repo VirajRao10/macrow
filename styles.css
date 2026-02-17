@@ -166,6 +166,12 @@ a.link{ color: rgba(226,232,240,0.92); text-decoration: underline; text-underlin
   margin: 10px 0 10px;
   flex-wrap: wrap;
 }
+.chartControls__actions{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .toggle{
   display:flex;
   align-items:center;
@@ -236,6 +242,181 @@ a.link{ color: rgba(226,232,240,0.92); text-decoration: underline; text-underlin
 }
 .eval{ margin: 10px 0 0 18px; color: var(--muted2); font-size: 11px; }
 .eval li{ margin: 4px 0; }
+
+.scenarioManager{
+  margin: 12px 14px 4px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.scenarioManager__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.scenarioManager__title{
+  font-weight: 950;
+  font-size: 13px;
+}
+.scenarioManager__hint{
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 220px;
+}
+.scenarioManager__form{
+  margin-top: 12px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.scenarioManager__input{
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.18);
+  color: var(--text);
+  font-size: 12px;
+}
+.scenarioManager__status{
+  margin-top: 8px;
+  min-height: 18px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.scenarioManager__status--success{ color: rgba(34,197,94,0.95); }
+.scenarioManager__status--error{ color: rgba(239,68,68,0.92); }
+.scenarioManager__list{
+  margin: 10px 0 0;
+  padding: 0;
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+}
+.scenarioManager__item{
+  list-style:none;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.scenarioManager__itemLoad{
+  flex: 1;
+  text-align:left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+}
+.scenarioManager__itemLoad:focus-visible{
+  outline: 2px solid rgba(59,130,246,0.75);
+  outline-offset: 3px;
+}
+.scenarioManager__itemName{
+  font-weight: 900;
+  font-size: 13px;
+}
+.scenarioManager__itemMeta{
+  font-size: 11px;
+  color: var(--muted);
+}
+.scenarioManager__itemActions{
+  display:flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.scenarioManager__itemActions .btn{
+  padding: 6px 8px;
+  font-size: 11px;
+  min-width: 74px;
+}
+.scenarioManager__empty{
+  justify-content:flex-start;
+  align-items:flex-start;
+  gap: 6px;
+}
+.learnBlock{
+  margin: 12px 14px 22px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(37,99,235,0.08);
+  border: 1px solid rgba(37,99,235,0.25);
+}
+.learnBlock__intro{
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.glossary{
+  display:grid;
+  gap: 8px;
+}
+.glossary__item{
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  font-size: 12px;
+  color: var(--text);
+}
+.glossary__item summary{
+  cursor:pointer;
+  font-weight: 900;
+  font-size: 12px;
+  color: var(--text);
+  list-style:none;
+  position: relative;
+}
+.glossary__item summary::-webkit-details-marker{
+  display: none;
+}
+.glossary__item summary::after{
+  content: "ⓘ";
+  margin-left: 6px;
+  font-size: 11px;
+  color: rgba(59,130,246,0.85);
+}
+.glossary__item p{
+  margin: 6px 0 0;
+  color: var(--muted2);
+  line-height: 1.35;
+}
+.glossary__hint{
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(148,163,184,0.75);
+}
+.learnTips{
+  margin-top: 10px;
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+.learnTips__item{
+  font-size: 12px;
+  color: var(--text);
+  display:flex;
+  align-items:flex-start;
+  gap: 6px;
+}
+.learnTips__item span{
+  font-weight: 900;
+  color: rgba(59,130,246,0.95);
+  min-width: 32px;
+}
 
 .slider{
   margin: 12px 14px 14px;
