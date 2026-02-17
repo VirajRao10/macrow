@@ -29,6 +29,13 @@
         <div class="brand__tag">IB Keynesian AD–AS, simplified and interactive</div>
       </div>
     </div>
+    <div class="topbar__actions">
+      <button id="themeToggle" class="btn btn--ghost themeToggle" type="button" aria-label="Toggle theme">
+        <span class="themeToggle__icon">🌙</span>
+        <span class="themeToggle__text">Theme</span>
+      </button>
+      <button id="btnShortcuts" class="btn btn--ghost" type="button">Shortcuts</button>
+    </div>
   </header>
 
   <main class="shell">
@@ -41,6 +48,13 @@
             <div class="dot dot--ad"></div><div class="legendText">AD (demand)</div>
             <div class="dot dot--as"></div><div class="legendText">AS (supply)</div>
             <div class="dot dot--lras"></div><div class="legendText">LRAS (potential)</div>
+          </div>
+        </div>
+
+        <div class="chartCard__loading" id="chartLoading" aria-hidden="true">
+          <div class="chartCard__loadingContent">
+            <span class="chartCard__spinner" aria-hidden="true"></span>
+            <span>Calculating…</span>
           </div>
         </div>
 
@@ -131,15 +145,15 @@
   <div id="welcomeOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
       <div class="modalHeader">
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div class="welcome__hero">
           <img
+            class="welcome__hero__logo"
             src="./assets/macrow-logo.png"
             alt="macrow logo"
-            style="width:56px; height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.08); object-fit:cover;"
           />
           <div>
             <div id="welcomeTitle" class="modalTitle">Welcome to macrow by Viraj!</div>
-            <div style="margin-top:2px; font-size:12px; color: rgba(148,163,184,0.75); font-weight:700;">
+            <div class="welcome__hero__tag">
               Simplified Macro(w)economic simulator for IB macroeconomic policy on the  Keynesian AD/AS diagram. Currently a prototype for friends/family!
             </div>
           </div>
@@ -171,6 +185,24 @@
         <div class="modalFooter">
           <button id="welcomeOk" class="btn btn--primary">Continue</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="shortcutOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutTitle">
+      <div class="modalHeader">
+        <div>
+          <div id="shortcutTitle" class="modalTitle">Keyboard shortcuts</div>
+          <div class="shortcutList__desc">Navigate macrow faster with these helpers.</div>
+        </div>
+        <button id="shortcutClose" class="iconBtn" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <div class="callout">
+          Keep your hands on the keys—tap “?” any time to return here.
+        </div>
+        <ul id="shortcutList" class="shortcutList"></ul>
       </div>
     </div>
   </div>

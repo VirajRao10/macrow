@@ -66,6 +66,10 @@ let state = {
   yFe: GRAPH.yFeBase
 };
 
+const THEME_STORAGE_KEY = "macrow_theme";
+let currentTheme = "dark";
+let welcomeOverlayClose = null;
+
 const SCENARIO_STORAGE_KEY = "macrow_saved_scenarios_v1";
 const MAX_SCENARIOS = 6;
 
@@ -94,6 +98,14 @@ const LEARN_TIPS = [
   "Describe the policy, gap, and impact on output/prices in a single sentence for exam clarity.",
   "Pair each intervention with a real-world example to boost the credibility of your analysis.",
   "Save and share your favorite scenarios before study sessions so you can revisit the reasoning quickly."
+];
+
+const KEYBOARD_SHORTCUTS = [
+  { combo: "?", description: "Open this keyboard shortcuts help" },
+  { combo: "Esc", description: "Close overlays or this modal" },
+  { combo: "Ctrl + 1 / 2 / 3", description: "Jump to Policies / Parameters / About" },
+  { combo: "R", description: "Reset parameters to their defaults" },
+  { combo: "S", description: "Quick focus on scenario name" }
 ];
 
 // ---------------- Parameters ----------------
@@ -268,6 +280,116 @@ function setTab(tab){
   if (f) f.classList.toggle("hidden", tab !== "parameters");
 }
 
+function loadPreferredTheme(){
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "dark" || stored === "light") return stored;
+  if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+  return "light";
+}
+
+function updateThemeToggleButton(){
+  const btn = qs("#themeToggle");
+  if (!btn) return;
+  const isDark = currentTheme === "dark";
+  const icon = isDark ? "☀️" : "🌙";
+  const label = isDark ? "Light mode" : "Dark mode";
+  btn.innerHTML = `<span class="themeToggle__icon">${icon}</span><span class="themeToggle__text">${label}</span>`;
+  btn.setAttribute("aria-label", `Switch to ${isDark ? "light" : "dark"} mode`);
+  btn.setAttribute("aria-pressed", String(isDark));
+}
+
+function applyTheme(theme, persist = true){
+  const normalized = theme === "light" ? "light" : "dark";
+  currentTheme = normalized;
+  document.documentElement.setAttribute("data-theme", normalized);
+  updateThemeToggleButton();
+  if (persist) localStorage.setItem(THEME_STORAGE_KEY, normalized);
+}
+
+function toggleTheme(){
+  applyTheme(currentTheme === "dark" ? "light" : "dark");
+}
+
+function renderShortcutList(){
+  const list = qs("#shortcutList");
+  if (!list) return;
+  list.innerHTML = KEYBOARD_SHORTCUTS.map((shortcut) => `
+    <li class="shortcutList__entry">
+      <span class="shortcutList__combo">${escapeHtml(shortcut.combo)}</span>
+      <span class="shortcutList__desc">${escapeHtml(shortcut.description)}</span>
+    </li>
+  `).join("");
+}
+
+function openShortcutOverlay(){
+  const overlay = qs("#shortcutOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function closeShortcutOverlay(){
+  const overlay = qs("#shortcutOverlay");
+  if (!overlay || overlay.classList.contains("hidden")) return false;
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  return true;
+}
+
+function handleGlobalShortcuts(event){
+  if (event.defaultPrevented) return;
+  const target = event.target;
+  const isEditable = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+  const triggerHelp = event.key === "?" || (event.key === "/" && event.shiftKey);
+  if (triggerHelp){
+    event.preventDefault();
+    openShortcutOverlay();
+    return;
+  }
+  if (event.key === "Escape" || event.key === "Esc"){
+    if (closeShortcutOverlay()){
+      event.preventDefault();
+      return;
+    }
+    if (welcomeOverlayClose){
+      welcomeOverlayClose();
+      event.preventDefault();
+      return;
+    }
+    return;
+  }
+  if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey){
+    if (event.key === "1"){
+      event.preventDefault();
+      setTab("policies");
+      return;
+    }
+    if (event.key === "2"){
+      event.preventDefault();
+      setTab("parameters");
+      return;
+    }
+    if (event.key === "3"){
+      event.preventDefault();
+      setTab("about");
+      return;
+    }
+    return;
+  }
+  if (isEditable) return;
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "r"){
+    event.preventDefault();
+    qs("#btnReset")?.click();
+    return;
+  }
+  if (key === "s"){
+    event.preventDefault();
+    scenarioNameInput?.focus();
+  }
+}
+
 // ---------------- Welcome Card (modal) ----------------
 function showWelcomeIfNeeded(){
   const key = "macrow_welcome_dismissed_v2";
@@ -283,7 +405,10 @@ function showWelcomeIfNeeded(){
     if (dont) localStorage.setItem(key, "1");
     overlay.classList.add("hidden");
     overlay.setAttribute("aria-hidden", "true");
+    welcomeOverlayClose = null;
   };
+
+  welcomeOverlayClose = close;
 
   qs("#welcomeClose").addEventListener("click", close, { once: true });
   qs("#welcomeOk").addEventListener("click", close, { once: true });
@@ -656,6 +781,18 @@ if (axisToggle){
 // Exporting as PNG
 qs("#btnExportPng").addEventListener("click", () => exportChartPng());
 
+const themeToggleButton = qs("#themeToggle");
+themeToggleButton?.addEventListener("click", toggleTheme);
+
+const shortcutButton = qs("#btnShortcuts");
+const shortcutOverlayElement = qs("#shortcutOverlay");
+const shortcutCloseButton = qs("#shortcutClose");
+shortcutButton?.addEventListener("click", openShortcutOverlay);
+shortcutCloseButton?.addEventListener("click", closeShortcutOverlay);
+shortcutOverlayElement?.addEventListener("click", (event) => {
+  if (event.target === shortcutOverlayElement) closeShortcutOverlay();
+});
+
 // ---------------- Main render pipeline ----------------
 function onParamsChanged(){
   const c = computeFromParams(state.params);
@@ -669,81 +806,108 @@ function onParamsChanged(){
 }
 
 // ---------------- Chart rendering ----------------
-function renderMainChart(){
-  const svg = qs("#chartSvg");
-  svg.innerHTML = "";
+let chartLoadingShowTimer = null;
+let chartLoadingHideTimer = null;
 
-  const W = 860, H = 560;
-  const pad = { l: 86, r: 28, t: 20, b: 78 };
-
-  const xScale = (Y) => pad.l + ((Y - GRAPH.Ymin) / (GRAPH.Ymax - GRAPH.Ymin)) * (W - pad.l - pad.r);
-  const yScale = (P) => pad.t + (1 - (P - GRAPH.Pmin) / (GRAPH.Pmax - GRAPH.Pmin)) * (H - pad.t - pad.b);
-
-  rect(svg, 0, 0, W, H, 18, "rgba(255,255,255,0.02)");
-
-  // Grid + ticks
-  const yTicks = [30, 50, 70, 90, 110];
-  const xTicks = [60, 90, 120, 150, 180];
-
-  yTicks.forEach(P => {
-    line(svg, pad.l, yScale(P), W - pad.r, yScale(P), "rgba(148,163,184,0.10)", 1);
-    if (settings.showAxisNumbers){
-      text(svg, pad.l - 10, yScale(P) + 4, String(P), "end", "rgba(148,163,184,0.70)", 11);
-    }
-  });
-
-  xTicks.forEach(Y => {
-    line(svg, xScale(Y), pad.t, xScale(Y), H - pad.b, "rgba(148,163,184,0.08)", 1);
-    if (settings.showAxisNumbers){
-      text(svg, xScale(Y), H - pad.b + 22, String(Y), "middle", "rgba(148,163,184,0.70)", 11);
-    }
-  });
-
-  // Axes
-  line(svg, pad.l, pad.t, pad.l, H - pad.b, "rgba(226,232,240,0.70)", 3);
-  line(svg, pad.l, H - pad.b, W - pad.r, H - pad.b, "rgba(226,232,240,0.70)", 3);
-
-  // Axis labels
-  text(svg, (pad.l + (W - pad.r)) / 2, H - 18, "Real GDP ($)", "middle", "rgba(226,232,240,0.92)", 13, true);
-  textRot(svg, 22, (pad.t + (H - pad.b))/2, "Average Price Level ($)", -90, "middle", "rgba(226,232,240,0.92)", 13, true);
-
-  const base = computeFromParams(defaults.params);
-  const cur  = { adShiftY: state.adShiftY, asShiftP: state.asShiftP, yFe: state.yFe };
-
-  // LRAS
-  drawLRAS(svg, xScale, base.yFe, pad, H, "rgba(34,197,94,0.18)", "6 8");
-  drawLRAS(svg, xScale, cur.yFe,  pad, H, "rgba(34,197,94,0.70)", "6 6");
-
-  // AD (properly clipped line segment => no “flat” kink)
-  const adBase = adLineSegment(base.adShiftY).seg;
-  const adCur  = adLineSegment(cur.adShiftY).seg;
-
-  if (adBase){
-    strokePath(svg, pathFromModelSegment(xScale, yScale, adBase), "rgba(239,68,68,0.22)", 5, "6 8");
-  }
-  if (adCur){
-    strokePath(svg, pathFromModelSegment(xScale, yScale, adCur), "rgba(239,68,68,0.95)", 6);
-  }
-
-  // AS (smooth + vertical)
-  const asBase = ASshape({ asShiftP: base.asShiftP, yFe: base.yFe });
-  const asCur  = ASshape({ asShiftP: cur.asShiftP,  yFe: cur.yFe });
-
-  strokePath(svg, pathFromPoints(xScale, yScale, asBase.pts), "rgba(59,130,246,0.22)", 5, "6 8");
-  strokePath(svg, pathFromPoints(xScale, yScale, asCur.pts),  "rgba(59,130,246,0.95)", 6);
-
-  // Shift arrows
-  drawADShiftArrow(svg, xScale, yScale, base, cur);
-  drawYfShiftArrow(svg, xScale, base.yFe, cur.yFe);
-
-  // Labels
-  labelOnAD(svg, xScale, yScale, cur.adShiftY);
-  labelOnAS(svg, xScale, yScale, asCur);
-  labelOnLRAS(svg, xScale, cur.yFe);
-
-  renderStateAndChips(base, cur);
+function showChartLoading(){
+  const loader = qs("#chartLoading");
+  if (!loader) return;
+  clearTimeout(chartLoadingHideTimer);
+  if (loader.classList.contains("is-visible")) return;
+  chartLoadingShowTimer = setTimeout(() => loader.classList.add("is-visible"), 80);
 }
 
+function hideChartLoading(){
+  const loader = qs("#chartLoading");
+  if (!loader) return;
+  clearTimeout(chartLoadingShowTimer);
+  if (!loader.classList.contains("is-visible")) return;
+  clearTimeout(chartLoadingHideTimer);
+  chartLoadingHideTimer = setTimeout(() => loader.classList.remove("is-visible"), 180);
+}
+
+function renderMainChart(){
+  showChartLoading();
+  requestAnimationFrame(() => {
+    const svg = qs("#chartSvg");
+    if (!svg){
+      hideChartLoading();
+      return;
+    }
+    svg.innerHTML = "";
+
+    const W = 860, H = 560;
+    const pad = { l: 86, r: 28, t: 20, b: 78 };
+
+    const xScale = (Y) => pad.l + ((Y - GRAPH.Ymin) / (GRAPH.Ymax - GRAPH.Ymin)) * (W - pad.l - pad.r);
+    const yScale = (P) => pad.t + (1 - (P - GRAPH.Pmin) / (GRAPH.Pmax - GRAPH.Pmin)) * (H - pad.t - pad.b);
+
+    rect(svg, 0, 0, W, H, 18, "rgba(255,255,255,0.02)");
+
+    // Grid + ticks
+    const yTicks = [30, 50, 70, 90, 110];
+    const xTicks = [60, 90, 120, 150, 180];
+
+    yTicks.forEach(P => {
+      line(svg, pad.l, yScale(P), W - pad.r, yScale(P), "rgba(148,163,184,0.10)", 1);
+      if (settings.showAxisNumbers){
+        text(svg, pad.l - 10, yScale(P) + 4, String(P), "end", "rgba(148,163,184,0.70)", 11);
+      }
+    });
+
+    xTicks.forEach(Y => {
+      line(svg, xScale(Y), pad.t, xScale(Y), H - pad.b, "rgba(148,163,184,0.08)", 1);
+      if (settings.showAxisNumbers){
+        text(svg, xScale(Y), H - pad.b + 22, String(Y), "middle", "rgba(148,163,184,0.70)", 11);
+      }
+    });
+
+    // Axes
+    line(svg, pad.l, pad.t, pad.l, H - pad.b, "rgba(226,232,240,0.70)", 3);
+    line(svg, pad.l, H - pad.b, W - pad.r, H - pad.b, "rgba(226,232,240,0.70)", 3);
+
+    // Axis labels
+    text(svg, (pad.l + (W - pad.r)) / 2, H - 18, "Real GDP ($)", "middle", "rgba(226,232,240,0.92)", 13, true);
+    textRot(svg, 22, (pad.t + (H - pad.b))/2, "Average Price Level ($)", -90, "middle", "rgba(226,232,240,0.92)", 13, true);
+
+    const base = computeFromParams(defaults.params);
+    const cur  = { adShiftY: state.adShiftY, asShiftP: state.asShiftP, yFe: state.yFe };
+
+    // LRAS
+    drawLRAS(svg, xScale, base.yFe, pad, H, "rgba(34,197,94,0.18)", "6 8");
+    drawLRAS(svg, xScale, cur.yFe,  pad, H, "rgba(34,197,94,0.70)", "6 6");
+
+    // AD (properly clipped line segment => no “flat” kink)
+    const adBase = adLineSegment(base.adShiftY).seg;
+    const adCur  = adLineSegment(cur.adShiftY).seg;
+
+    if (adBase){
+      strokePath(svg, pathFromModelSegment(xScale, yScale, adBase), "rgba(239,68,68,0.22)", 5, "6 8");
+    }
+    if (adCur){
+      strokePath(svg, pathFromModelSegment(xScale, yScale, adCur), "rgba(239,68,68,0.95)", 6);
+    }
+
+    // AS (smooth + vertical)
+    const asBase = ASshape({ asShiftP: base.asShiftP, yFe: base.yFe });
+    const asCur  = ASshape({ asShiftP: cur.asShiftP,  yFe: cur.yFe });
+
+    strokePath(svg, pathFromPoints(xScale, yScale, asBase.pts), "rgba(59,130,246,0.22)", 5, "6 8");
+    strokePath(svg, pathFromPoints(xScale, yScale, asCur.pts),  "rgba(59,130,246,0.95)", 6);
+
+    // Shift arrows
+    drawADShiftArrow(svg, xScale, yScale, base, cur);
+    drawYfShiftArrow(svg, xScale, base.yFe, cur.yFe);
+
+    // Labels
+    labelOnAD(svg, xScale, yScale, cur.adShiftY);
+    labelOnAS(svg, xScale, yScale, asCur);
+    labelOnLRAS(svg, xScale, cur.yFe);
+
+    renderStateAndChips(base, cur);
+    hideChartLoading();
+  });
+}
 function renderStateAndChips(base, cur){
   const chipRoot = qs("#changeChips");
   const gapRoot = qs("#gapLabel");
@@ -1358,6 +1522,7 @@ function miniArrow(svg, x1, y1, x2, y2, color){
 
 // ---------------- Init Function ---------------
 function init(){
+  applyTheme(loadPreferredTheme(), false);
   state.params = deepCopy(defaults.params);
   const loadedFromLink = loadScenarioFromUrl();
 
@@ -1365,6 +1530,7 @@ function init(){
   renderParametersPanel();
   renderAboutPanel();
   renderScenarioManager();
+  renderShortcutList();
 
   setTab("policies");
   showWelcomeIfNeeded();
@@ -1374,3 +1540,4 @@ function init(){
   if (loadedFromLink) showScenarioManagerStatus("Loaded scenario from shared link", "success");
 }
 init();
+document.addEventListener("keydown", handleGlobalShortcuts);
