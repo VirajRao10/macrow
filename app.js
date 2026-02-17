@@ -18,7 +18,7 @@ const LEARN_TIPS=[
 const LEARN_MODULES=[
   {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
   {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
-  {title:"Classroom investigation template",points:["Set a starting state and ask students to predict P/Y before moving any slider.","Apply one policy, then require annotation of what shifted and why.","Compare short-run gains against inflation or unemployment trade-offs.","Finish with a 2–3 sentence evaluation using assumptions and limits."]},
+  {title:"Data interpretation drill",points:["Read the chart first: identify current P, Y, and where Y sits relative to Yf.","State the likely macro condition (recessionary gap, inflationary pressure, or near full employment).","Infer which curve most likely shifted and justify with one real-world trigger.","Conclude with one policy response and one limitation."]},
   {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
 ];
 
