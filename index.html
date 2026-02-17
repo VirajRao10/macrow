@@ -29,13 +29,6 @@
         <div class="brand__tag">IB Keynesian AD–AS, simplified and interactive</div>
       </div>
     </div>
-    <div class="topbar__actions">
-      <button id="themeToggle" class="btn btn--ghost themeToggle" type="button" aria-label="Toggle theme">
-        <span class="themeToggle__icon">🌙</span>
-        <span class="themeToggle__text">Theme</span>
-      </button>
-      <button id="btnShortcuts" class="btn btn--ghost" type="button">Shortcuts</button>
-    </div>
   </header>
 
   <main class="shell">
@@ -51,13 +44,6 @@
           </div>
         </div>
 
-        <div class="chartCard__loading" id="chartLoading" aria-hidden="true">
-          <div class="chartCard__loadingContent">
-            <span class="chartCard__spinner" aria-hidden="true"></span>
-            <span>Calculating…</span>
-          </div>
-        </div>
-
         <div class="chartWrap">
           <svg id="chartSvg" viewBox="0 0 860 560" width="100%" height="100%" aria-label="Keynesian AD-AS chart"></svg>
         </div>
@@ -65,7 +51,25 @@
         <div class="underChart">
           <div class="chipsRow">
             <div id="changeChips" class="chips"></div>
-            <div id="gapLabel" class="stateLabel">State: —</div>
+            <div id="gapLabel" class="stateLabel" role="status" aria-live="polite" aria-atomic="true">State: —</div>
+          </div>
+
+          <div class="eqSummary" aria-live="polite" aria-atomic="true">
+            <div class="eqSummary__stat">
+              <div class="eqSummary__label">Equilibrium output (Y)</div>
+              <div class="eqSummary__value" id="statOutputValue">—</div>
+              <div class="eqSummary__delta" id="statOutputDelta">Δ —</div>
+            </div>
+            <div class="eqSummary__stat">
+              <div class="eqSummary__label">Price level (P)</div>
+              <div class="eqSummary__value" id="statPriceValue">—</div>
+              <div class="eqSummary__delta" id="statPriceDelta">Δ —</div>
+            </div>
+            <div class="eqSummary__stat">
+              <div class="eqSummary__label">Potential output (Yf)</div>
+              <div class="eqSummary__value" id="statPotentialValue">—</div>
+              <div class="eqSummary__delta" id="statPotentialDelta">Δ —</div>
+            </div>
           </div>
 
           <!-- Showing onky on PM tab -->
@@ -81,10 +85,7 @@
               <span>Show axis numbers</span>
             </label>
 
-            <div class="chartControls__actions">
-              <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
-              <button id="btnShareScenario" class="btn btn--ghost">Share scenario</button>
-            </div>
+            <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
           </div>
 
           <div class="scenarioBtns">
@@ -97,29 +98,19 @@
       </div>
 
       <!-- Side panel -->
-      <aside class="card sideCard">
+      <aside class="card sideCard" aria-label="Control panels">
         <div class="sideHeader">
           <div id="panelTitle" class="sideTitle">Policies</div>
-          <button id="btnReset" class="btn btn--ghost">Reset</button>
-        </div>
-
-        <div id="scenarioManager" class="scenarioManager">
-          <div class="scenarioManager__header">
-            <div>
-              <div class="scenarioManager__title">Scenario manager</div>
-              <div class="scenarioManager__hint">Save up to 6 custom setups and share them instantly.</div>
-            </div>
+          <div style="display:flex; gap:8px;">
+            <button id="btnScenarios" class="btn btn--ghost" aria-label="Open scenario manager">Scenarios</button>
+            <button id="btnReset" class="btn btn--ghost" aria-label="Reset parameters">Reset</button>
           </div>
-          <div class="scenarioManager__form">
-            <input id="scenarioNameInput" type="text" class="scenarioManager__input" maxlength="42" placeholder="Name this scenario (e.g., “Demand pull fix”)" />
-            <button id="btnSaveScenario" class="btn btn--primary">Save current scenario</button>
-          </div>
-          <div id="scenarioManagerStatus" class="scenarioManager__status"></div>
-          <ul id="scenarioList" class="scenarioManager__list"></ul>
         </div>
 
         <div id="panelPolicies"></div>
         <div id="panelParameters" class="hidden"></div>
+        <div id="panelLearn" class="hidden"></div>
+        <div id="panelAccessibility" class="hidden"></div>
         <div id="panelAbout" class="hidden"></div>
       </aside>
     </section>
@@ -127,33 +118,26 @@
 
   <!-- Bottom nav -->
   <nav class="bottomNav" aria-label="Tabs">
-    <button class="navBtn navBtn--active" data-tab="policies">
-      <span class="navIcon">📘</span>
-      <span class="navText">Policies</span>
-    </button>
-    <button class="navBtn" data-tab="parameters">
-      <span class="navIcon">🎛️</span>
-      <span class="navText">Parameters</span>
-    </button>
-    <button class="navBtn" data-tab="about">
-      <span class="navIcon">ℹ️</span>
-      <span class="navText">About</span>
-    </button>
+    <button class="navBtn navBtn--active" data-tab="policies"><span class="navIcon">📘</span><span class="navText">Policies</span></button>
+    <button class="navBtn" data-tab="parameters"><span class="navIcon">🎛️</span><span class="navText">Parameters</span></button>
+    <button class="navBtn" data-tab="learn"><span class="navIcon">🎓</span><span class="navText">Learn</span></button>
+    <button class="navBtn" data-tab="accessibility"><span class="navIcon">♿</span><span class="navText">Access</span></button>
+    <button class="navBtn" data-tab="about"><span class="navIcon">ℹ️</span><span class="navText">About</span></button>
   </nav>
 
   <!-- Welcome page -->
   <div id="welcomeOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle">
       <div class="modalHeader">
-        <div class="welcome__hero">
+        <div style="display:flex; align-items:center; gap:12px;">
           <img
-            class="welcome__hero__logo"
             src="./assets/macrow-logo.png"
             alt="macrow logo"
+            style="width:56px; height:56px; border-radius:16px; border:1px solid rgba(255,255,255,0.16); background:rgba(255,255,255,0.08); object-fit:cover;"
           />
           <div>
             <div id="welcomeTitle" class="modalTitle">Welcome to macrow by Viraj!</div>
-            <div class="welcome__hero__tag">
+            <div style="margin-top:2px; font-size:12px; color: rgba(148,163,184,0.75); font-weight:700;">
               Simplified Macro(w)economic simulator for IB macroeconomic policy on the  Keynesian AD/AS diagram. Currently a prototype for friends/family!
             </div>
           </div>
@@ -189,29 +173,55 @@
     </div>
   </div>
 
-  <div id="shortcutOverlay" class="overlay hidden" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutTitle">
+  <div id="scenarioOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="scenarioTitle">
       <div class="modalHeader">
-        <div>
-          <div id="shortcutTitle" class="modalTitle">Keyboard shortcuts</div>
-          <div class="shortcutList__desc">Navigate macrow faster with these helpers.</div>
-        </div>
-        <button id="shortcutClose" class="iconBtn" aria-label="Close">✕</button>
+        <div id="scenarioTitle" class="modalTitle">Scenario manager</div>
+        <button id="scenarioClose" class="iconBtn" aria-label="Close scenario manager">✕</button>
       </div>
       <div class="modalBody">
-        <div class="callout">
-          Keep your hands on the keys—tap “?” any time to return here.
+        <div class="scenarioToolbar">
+          <input id="scenarioName" class="textInput" placeholder="Scenario name" aria-label="Scenario name" />
+          <select id="scenarioCategory" class="textInput" aria-label="Scenario category">
+            <option value="recession">Recession</option><option value="inflation">Inflation</option><option value="growth">Growth</option><option value="supply-shock">Supply shock</option><option value="custom">Custom</option>
+          </select>
+          <button id="btnSaveScenario" class="btn btn--primary">Save current</button>
         </div>
-        <ul id="shortcutList" class="shortcutList"></ul>
+        <div id="scenarioListRoot" class="scenarioList" aria-live="polite"></div>
+        <div class="scenarioToolbar">
+          <button id="btnExportJson" class="btn btn--ghost">Export JSON</button>
+          <label class="btn btn--ghost" for="scenarioImportFile">Import JSON</label>
+          <input id="scenarioImportFile" type="file" accept="application/json" class="hidden" />
+          <button id="btnShareScenario" class="btn btn--ghost">Share URL</button>
+          <button id="btnQrExport" class="btn btn--ghost">Export QR</button>
+          <button id="btnQrScan" class="btn btn--ghost">Scan QR</button>
+        </div>
+        <div id="qrArea" class="hidden"></div>
+        <div id="qrScannerArea" class="hidden">
+          <video id="qrVideo" playsinline muted></video>
+          <canvas id="qrCanvas" class="hidden"></canvas>
+          <div id="qrScannerHint" class="sectionHint"></div>
+        </div>
       </div>
     </div>
   </div>
+
+  <div id="shortcutsOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+      <div class="modalHeader"><div id="shortcutsTitle" class="modalTitle">Keyboard shortcuts</div><button id="shortcutsClose" class="iconBtn" aria-label="Close keyboard shortcuts">✕</button></div>
+      <div id="shortcutsList" class="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="chartTooltip" class="chartTooltip hidden" role="tooltip"></div>
 
   <footer class="footer">
     <div class="footerLeft">macrow is simplified for the IB syllabus by Viraj. Further individual exploration of these concepts is always recommended. RaoCo, All rights reserved.</div>
     <div class="footerRight">Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a></div>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script defer src="./app.js"></script>
 </body>
 </html>
