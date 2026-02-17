@@ -88,11 +88,23 @@
             <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
           </div>
 
-          <div class="scenarioBtns">
-            <button id="btnMakeRecession" class="btn btn--ghost">Create recessionary gap</button>
-            <button id="btnMakeDemandPull" class="btn btn--ghost">Create demand-pull inflation</button>
-            <button id="btnMakeCostPush" class="btn btn--ghost">Create Cost-push inflation</button>
-            <button id="btnClearGap" class="btn btn--ghost">Clear scenario</button>
+          <div class="quickActions" aria-label="Scenario quick actions">
+            <button id="btnMakeRecession" class="actionCard actionCard--recession">
+              <span class="actionCard__title">Recessionary gap</span>
+              <span class="actionCard__text">AD shifts left, output drops below potential</span>
+            </button>
+            <button id="btnMakeDemandPull" class="actionCard actionCard--demand">
+              <span class="actionCard__title">Demand-pull inflation</span>
+              <span class="actionCard__text">AD shifts right, prices and output rise</span>
+            </button>
+            <button id="btnMakeCostPush" class="actionCard actionCard--cost">
+              <span class="actionCard__title">Cost-push inflation</span>
+              <span class="actionCard__text">AS shifts left due to production cost pressure</span>
+            </button>
+            <button id="btnClearGap" class="actionCard actionCard--clear">
+              <span class="actionCard__title">Reset to baseline</span>
+              <span class="actionCard__text">Return all macro conditions to neutral</span>
+            </button>
           </div>
         </div>
       </div>
@@ -110,7 +122,6 @@
         <div id="panelPolicies"></div>
         <div id="panelParameters" class="hidden"></div>
         <div id="panelLearn" class="hidden"></div>
-        <div id="panelAccessibility" class="hidden"></div>
         <div id="panelAbout" class="hidden"></div>
       </aside>
     </section>
@@ -121,7 +132,6 @@
     <button class="navBtn navBtn--active" data-tab="policies"><span class="navIcon">📘</span><span class="navText">Policies</span></button>
     <button class="navBtn" data-tab="parameters"><span class="navIcon">🎛️</span><span class="navText">Parameters</span></button>
     <button class="navBtn" data-tab="learn"><span class="navIcon">🎓</span><span class="navText">Learn</span></button>
-    <button class="navBtn" data-tab="accessibility"><span class="navIcon">♿</span><span class="navText">Access</span></button>
     <button class="navBtn" data-tab="about"><span class="navIcon">ℹ️</span><span class="navText">About</span></button>
   </nav>
 

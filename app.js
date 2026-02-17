@@ -5,7 +5,7 @@ const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"a",desc:"Accessibility tab"},
+  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset"}
 ];
 const LEARN_TIPS=["AD right: output and price rise.","AS left (cost-push): output falls, price rises.","LRAS right: potential output increases."];
@@ -39,7 +39,7 @@ function clipLineToBox(m,b,box){const {Ymin,Ymax,Pmin,Pmax}=box,pts=[]; [[Ymin,m
 const adLineSegment=adShiftY=>{const m=-GRAPH.adSlope,b=GRAPH.adIntercept+GRAPH.adSlope*(GRAPH.adPivotY+adShiftY); return {m,b,seg:clipLineToBox(m,b,GRAPH)}};
 
 const navButtons=qsa('.navBtn');
-function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","accessibility","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
+function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
 
 const policyCards=[
@@ -67,8 +67,12 @@ const paramDefs=[
 ];
 function renderParametersPanel(){const root=qs('#panelParameters'); root.innerHTML='<div class="sectionTitle">Explore drivers</div>'; paramDefs.forEach(d=>{const wrap=document.createElement('div'); wrap.className='slider'; wrap.innerHTML=`<div class="slider__top"><div><div class="slider__label">${d.label}</div><div class="slider__hint">${d.hint}</div></div><div class="slider__value" id="val_${d.key}">—</div></div><input type="range" id="rng_${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" />`; root.appendChild(wrap);}); paramDefs.forEach(d=>{const rng=qs(`#rng_${d.key}`); rng.value=state.params[d.key]; rng.oninput=()=>{state.params[d.key]=Number(rng.value); onParamsChanged(true);}; addSwipeAdjust(rng,d.step);}); syncParamReadouts();}
 function renderLearnPanel(){const root=qs('#panelLearn'); root.innerHTML=`<div class="sectionTitle">IB Learn mode</div>${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}<div class="sectionTitle">Glossary</div>${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;}
-function renderAccessibilityPanel(){const root=qs('#panelAccessibility'); root.innerHTML='<div class="sectionTitle">Accessibility</div><label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label><div class="learnCard"><button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button></div>'; qs('#toggleAccess').checked=settings.accessibility; qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);}; qs('#btnOpenShortcuts').onclick=openShortcuts;}
-function renderAboutPanel(){qs('#panelAbout').innerHTML='<div class="sectionTitle">About macrow</div><div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div>';}
+function renderAboutPanel(){
+  qs('#panelAbout').innerHTML='<div class="sectionTitle">About macrow</div><div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div><div class="learnCard"><label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label><button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button></div>';
+  qs('#toggleAccess').checked=settings.accessibility;
+  qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
+  qs('#btnOpenShortcuts').onclick=openShortcuts;
+}
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
 
 qs('#btnReset').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
@@ -79,7 +83,13 @@ qs('#btnClearGap').onclick=()=>{state.params=deepCopy(defaults.params); onParams
 qs('#toggleAxisNumbers').onchange=e=>{settings.showAxisNumbers=e.target.checked; localStorage.setItem('macrow_show_axis_numbers',settings.showAxisNumbers?'1':'0'); renderMainChart();}; qs('#toggleAxisNumbers').checked=settings.showAxisNumbers;
 qs('#btnExportPng').onclick=()=>exportChartPng();
 
-function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); renderMainChart(); if(pushHistory) pushPolicyHistory(); navigator.vibrate?.(8);}
+let pendingRender=false;
+function queueRender(){
+  if(pendingRender) return;
+  pendingRender=true;
+  requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
+}
+function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); queueRender(); if(pushHistory) pushPolicyHistory();}
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
@@ -90,7 +100,20 @@ drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true); drawCurveSet(svg,x,y,c
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
 function drawCurveSet(svg,x,y,v,tint,muted=false,dash){drawLRAS(svg,x,v.yFe,20,482,tint||'rgba(34,197,94,0.70)',dash||'6 6'); const ad=adLineSegment(v.adShiftY).seg; if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash); const as=ASshape(v); strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash); labelOnAD(svg,x,y,v.adShiftY,tint); labelOnAS(svg,x,y,as,tint); labelOnLRAS(svg,x,v.yFe,tint);}
-function renderState(base,cur){const b=equilibrium(base),c=equilibrium(cur),dY=c.y-b.y,dP=c.p-b.p; qs('#changeChips').innerHTML=''; qs('#changeChips').append(chip(dY,'Output'),chip(dP,'Prices')); qs('#gapLabel').textContent=c.y<cur.yFe-2?'State: recessionary gap':(c.p>70?'State: inflationary pressure':'State: near full employment'); qs('#statOutputValue').textContent=c.y.toFixed(1); qs('#statPriceValue').textContent=c.p.toFixed(1); qs('#statPotentialValue').textContent=cur.yFe.toFixed(1); qs('#statOutputDelta').textContent=`Δ ${dY>=0?'+':''}${dY.toFixed(1)}`; qs('#statPriceDelta').textContent=`Δ ${dP>=0?'+':''}${dP.toFixed(1)}`; qs('#statPotentialDelta').textContent=`Δ ${(cur.yFe-base.yFe>=0?'+':'')+(cur.yFe-base.yFe).toFixed(1)}`;}
+function renderState(base,cur){
+  const b=equilibrium(base),c=equilibrium(cur),dY=c.y-b.y,dP=c.p-b.p,dYf=cur.yFe-base.yFe;
+  const num=v=>Number(v).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+  const delta=v=>`Δ ${v>0?'+':''}${num(v)}`;
+  qs('#changeChips').innerHTML='';
+  qs('#changeChips').append(chip(dY,'Output'),chip(dP,'Prices'));
+  qs('#gapLabel').textContent=c.y<cur.yFe-2?'State: recessionary gap':(c.p>70?'State: inflationary pressure':'State: near full employment');
+  qs('#statOutputValue').textContent=`Y ${num(c.y)}`;
+  qs('#statPriceValue').textContent=`P ${num(c.p)}`;
+  qs('#statPotentialValue').textContent=`Yf ${num(cur.yFe)}`;
+  qs('#statOutputDelta').textContent=delta(dY);
+  qs('#statPriceDelta').textContent=delta(dP);
+  qs('#statPotentialDelta').textContent=delta(dYf);
+}
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
 function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const items=[{label:'AD',text:'Aggregate Demand: C + I + G + (X−M)',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'AS',text:'Short-run Aggregate Supply',x:ASshape(cur).yKink+8,y:60},{label:'LRAS',text:'Long-run potential output (Yf)',x:cur.yFe,y:95},{label:'X axis',text:'Real output (GDP)',x:120,y:22},{label:'Y axis',text:'Average price level',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r',8); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
@@ -105,18 +128,95 @@ function persistScenarios(){localStorage.setItem(SCENARIO_STORAGE_KEY,JSON.strin
 function renderScenarioList(){const root=qs('#scenarioListRoot'); root.innerHTML=scenarios.map(s=>`<div class="scenarioItem"><div><b>${escapeHtml(s.name)}</b><div class="sectionHint">${escapeHtml(s.category)}</div></div><div><button class="btn btn--ghost" data-load="${s.id}">Load</button><button class="btn btn--ghost" data-del="${s.id}">Delete</button></div></div>`).join('')||'<div class="sectionHint">No saved scenarios yet.</div>'; root.onclick=e=>{const l=e.target.closest('[data-load]'),d=e.target.closest('[data-del]'); if(l){const s=scenarios.find(x=>x.id===l.dataset.load); if(s){state.params=deepCopy(s.params); onParamsChanged(true);}} if(d){scenarios=scenarios.filter(x=>x.id!==d.dataset.del); persistScenarios(); renderScenarioList();}};}
 function exportScenariosJson(){const blob=new Blob([JSON.stringify(scenarios,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='macrow-scenarios.json'; a.click();}
 function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){scenarios=data.concat(scenarios); persistScenarios(); renderScenarioList();}}catch{alert('Invalid JSON')}}; r.readAsText(f);}
-function encodeScenario(s){return btoa(unescape(encodeURIComponent(JSON.stringify(s))));}
-function decodeScenario(raw){return JSON.parse(decodeURIComponent(escape(atob(raw))));}
-function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const code=encodeURIComponent(encodeScenario({name:s.name,params:s.params,category:s.category})); const url=`${location.origin}${location.pathname}?scenario=${code}`; navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}
-async function exportScenarioQr(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const code=`${location.origin}${location.pathname}?scenario=${encodeURIComponent(encodeScenario({name:s.name,params:s.params,category:s.category}))}`; const area=qs('#qrArea'); area.classList.remove('hidden'); area.innerHTML=''; const canvas=document.createElement('canvas'); await QRCode.toCanvas(canvas,code,{width:260,margin:1,errorCorrectionLevel:'H'}); const ctx=canvas.getContext('2d'); const logo=new Image(); logo.src='./assets/macrow-logo.png'; await new Promise(res=>logo.onload=res); const sz=56; ctx.fillStyle='white'; ctx.fillRect((canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz); ctx.drawImage(logo,(canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz); area.append(canvas);}
+function encodeScenario(s){
+  const bytes=new TextEncoder().encode(JSON.stringify(s));
+  let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function decodeScenario(raw){
+  const b64=raw.replace(/-/g,'+').replace(/_/g,'/');
+  const padded=b64 + '==='.slice((b64.length+3)%4);
+  try{
+    const bin=atob(padded);
+    const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }catch{
+    return JSON.parse(decodeURIComponent(escape(atob(raw))));
+  }
+}
+function buildScenarioURL(s){
+  const payload={name:s.name,params:s.params,category:s.category};
+  return `${location.origin}${location.pathname}?scenario=${encodeURIComponent(encodeScenario(payload))}`;
+}
+function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}
+async function exportScenarioQr(){
+  const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'};
+  const code=buildScenarioURL(s);
+  const area=qs('#qrArea');
+  area.classList.remove('hidden');
+  area.innerHTML='';
+  try{
+    const canvas=document.createElement('canvas');
+    await QRCode.toCanvas(canvas,code,{width:300,margin:2,errorCorrectionLevel:'H'});
+    const ctx=canvas.getContext('2d');
+    const logo=new Image();
+    logo.crossOrigin='anonymous';
+    const logoLoaded=new Promise((resolve,reject)=>{logo.onload=resolve; logo.onerror=reject;});
+    logo.src='./assets/macrow-logo.png';
+    await logoLoaded;
+    const sz=64;
+    ctx.fillStyle='white';
+    ctx.fillRect((canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz);
+    ctx.drawImage(logo,(canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz);
+    const dl=document.createElement('a');
+    dl.className='btn btn--ghost';
+    dl.download=`macrow-scenario-${Date.now()}.png`;
+    dl.href=canvas.toDataURL('image/png');
+    dl.textContent='Download QR image';
+    area.append(canvas,dl);
+  }catch{
+    area.innerHTML='<div class="sectionHint">Unable to generate QR with logo right now. Please try again.</div>';
+  }
+}
 let qrStream=null,qrLoopId=null;
-async function startQrScanner(){const area=qs('#qrScannerArea'),hint=qs('#qrScannerHint'),video=qs('#qrVideo'),canvas=qs('#qrCanvas'); area.classList.remove('hidden'); if(!window.matchMedia('(pointer:coarse)').matches){hint.textContent='Desktop detected: use Import JSON or Share URL.'; return;} try{qrStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}); video.srcObject=qrStream; await video.play(); hint.textContent='Point camera at scenario QR code.'; const ctx=canvas.getContext('2d'); const tick=()=>{if(video.readyState>=2){canvas.width=video.videoWidth; canvas.height=video.videoHeight; ctx.drawImage(video,0,0); const img=ctx.getImageData(0,0,canvas.width,canvas.height); const code=window.jsQR?.(img.data,canvas.width,canvas.height); if(code?.data){loadScenarioFromEncodedUrl(code.data); hint.textContent='Scenario loaded!'; stopQrScanner(); return;}} qrLoopId=requestAnimationFrame(tick);}; tick();}catch{hint.textContent='Camera access failed. Use Import JSON.';}}
+async function startQrScanner(){
+  const area=qs('#qrScannerArea'),hint=qs('#qrScannerHint'),video=qs('#qrVideo'),canvas=qs('#qrCanvas');
+  area.classList.remove('hidden');
+  stopQrScanner();
+  try{
+    const isMobile=window.matchMedia('(pointer:coarse)').matches;
+    qrStream=await navigator.mediaDevices.getUserMedia({video:isMobile?{facingMode:{ideal:'environment'}}:true});
+    video.srcObject=qrStream;
+    await video.play();
+    hint.textContent='Point camera at scenario QR code.';
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    const tick=()=>{
+      if(video.readyState>=2){
+        canvas.width=video.videoWidth;
+        canvas.height=video.videoHeight;
+        ctx.drawImage(video,0,0);
+        const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+        const code=window.jsQR?.(img.data,canvas.width,canvas.height);
+        if(code?.data){
+          loadScenarioFromEncodedUrl(code.data);
+          hint.textContent='Scenario loaded!';
+          stopQrScanner();
+          return;
+        }
+      }
+      qrLoopId=requestAnimationFrame(tick);
+    };
+    tick();
+  }catch{
+    hint.textContent='Camera access failed. Use Import JSON.';
+  }
+}
 function stopQrScanner(){if(qrLoopId) cancelAnimationFrame(qrLoopId); qrLoopId=null; if(qrStream){qrStream.getTracks().forEach(t=>t.stop()); qrStream=null;}}
 function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin); const val=u.searchParams.get('scenario'); if(!val) return; const obj=decodeScenario(decodeURIComponent(val)); if(obj?.params){state.params={...state.params,...obj.params}; onParamsChanged(true);}}catch{}}
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='?'){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='a')setTab('accessibility'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+window.addEventListener('keydown',e=>{if(e.key==='?'){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
@@ -133,4 +233,4 @@ function drawLRAS(svg,x,yFe,t,b,s,d){line(svg,x(yFe),t,x(yFe),b,s,3.5,d);} funct
 
 function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v2'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=()=>{if(qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true');}; qs('#welcomeClose').onclick=close; qs('#welcomeOk').onclick=close;}
 
-function init(){document.body.classList.toggle('accessibility-mode',settings.accessibility); renderPoliciesPanel(); renderParametersPanel(); renderLearnPanel(); renderAccessibilityPanel(); renderAboutPanel(); initScenarioManager(); setTab('policies'); showWelcomeIfNeeded(); applyScenarioFromUrl(); onParamsChanged(true);} init();
+function init(){document.body.classList.toggle('accessibility-mode',settings.accessibility); renderPoliciesPanel(); renderParametersPanel(); renderLearnPanel(); renderAboutPanel(); initScenarioManager(); setTab('policies'); showWelcomeIfNeeded(); applyScenarioFromUrl(); onParamsChanged(true);} init();
