@@ -8,13 +8,38 @@ const KEYBOARD_SHORTCUTS=[
   {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset"}
 ];
-const LEARN_TIPS=["AD right: output and price rise.","AS left (cost-push): output falls, price rises.","LRAS right: potential output increases."];
+const LEARN_TIPS=[
+  "AD shifts right usually raise real output and the price level in the short run.",
+  "AS shifts left (cost-push shock) create inflation with weaker growth.",
+  "LRAS shifts right raise potential output and reduce inflationary pressure over time.",
+  "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs."
+];
+const LEARN_MODULES=[
+  {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
+  {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
+  {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
+];
 const GLOSSARY=[
-  {term:"Aggregate Demand (AD)",blurb:"Total planned spending in an economy at each price level."},
-  {term:"Aggregate Supply (AS)",blurb:"Total output firms are willing to produce at each price level."},
-  {term:"LRAS",blurb:"Potential output (full employment) in the long run."},
-  {term:"Recessionary gap",blurb:"Equilibrium output below potential output."},
-  {term:"Demand-pull inflation",blurb:"Excess demand pushes prices up."}
+  {term:"Aggregate Demand (AD)",blurb:"Total planned spending at each price level: C + I + G + (X − M). AD shifts right when spending conditions improve."},
+  {term:"Aggregate Supply (AS)",blurb:"Short-run total output producers are willing to supply. It can shift left after cost shocks and right after cost reductions."},
+  {term:"Long-run Aggregate Supply (LRAS)",blurb:"Potential output at full employment. It moves with productive capacity, not short-run demand management."},
+  {term:"Recessionary gap",blurb:"Actual output below potential output (Y < Yf). Usually linked to cyclical unemployment and weak demand."},
+  {term:"Inflationary gap",blurb:"Actual output above sustainable potential (Y > Yf), often creating upward pressure on wages and prices."},
+  {term:"Demand-pull inflation",blurb:"Rising price level caused by strong aggregate demand relative to productive capacity."},
+  {term:"Cost-push inflation",blurb:"Inflation driven by higher production costs (e.g., wages, imported energy, taxes on firms)."},
+  {term:"Disinflation",blurb:"A fall in the inflation rate (prices still rise, but more slowly). Different from deflation."},
+  {term:"Deflation",blurb:"Sustained fall in the overall price level. Can increase real debt burdens and delay spending."},
+  {term:"Automatic stabilisers",blurb:"Tax and benefit systems that soften business-cycle swings without new policy decisions."},
+  {term:"Expansionary fiscal policy",blurb:"Higher government spending and/or lower taxes to stimulate AD and real output."},
+  {term:"Contractionary fiscal policy",blurb:"Lower spending and/or higher taxes to reduce excess demand and inflation pressure."},
+  {term:"Expansionary monetary policy",blurb:"Lower interest rates / easier credit conditions to stimulate investment and consumption."},
+  {term:"Contractionary monetary policy",blurb:"Higher rates / tighter credit to cool inflation by reducing demand growth."},
+  {term:"Supply-side policy",blurb:"Measures that improve productivity, competition, skills, or infrastructure, shifting AS/LRAS right."},
+  {term:"Output gap",blurb:"Difference between actual GDP and potential GDP; useful for diagnosing cyclical pressure."},
+  {term:"Multiplier effect",blurb:"Initial spending change causes a larger final change in national income through repeated re-spending."},
+  {term:"Crowding out",blurb:"Government borrowing can raise rates and reduce private investment if spare capacity is limited."},
+  {term:"Stagflation",blurb:"Combination of weak growth/unemployment with high inflation, often from adverse supply shocks."},
+  {term:"Policy time lags",blurb:"Recognition, decision, and impact delays that reduce precision of stabilization policy."}
 ];
 
 const GRAPH={Ymin:40,Ymax:180,Pmin:20,Pmax:120,adIntercept:80,adSlope:0.75,adPivotY:120,pFlat:55,yFeBase:120,kinkGap:20,curveRise:25};
@@ -66,9 +91,20 @@ const paramDefs=[
 {key:'supplySideReform',label:'Supply-side policy intensity',hint:'Captures tax/regulation/training bundles.',min:0,max:100,step:1,format:v=>`${v}`}
 ];
 function renderParametersPanel(){const root=qs('#panelParameters'); root.innerHTML='<div class="sectionTitle">Explore drivers</div>'; paramDefs.forEach(d=>{const wrap=document.createElement('div'); wrap.className='slider'; wrap.innerHTML=`<div class="slider__top"><div><div class="slider__label">${d.label}</div><div class="slider__hint">${d.hint}</div></div><div class="slider__value" id="val_${d.key}">—</div></div><input type="range" id="rng_${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" />`; root.appendChild(wrap);}); paramDefs.forEach(d=>{const rng=qs(`#rng_${d.key}`); rng.value=state.params[d.key]; rng.oninput=()=>{state.params[d.key]=Number(rng.value); onParamsChanged(true);}; addSwipeAdjust(rng,d.step);}); syncParamReadouts();}
-function renderLearnPanel(){const root=qs('#panelLearn'); root.innerHTML=`<div class="sectionTitle">IB Learn mode</div>${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}<div class="sectionTitle">Glossary</div>${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;}
+function renderLearnPanel(){
+  const root=qs('#panelLearn');
+  root.innerHTML=`
+    <div class="sectionTitle">IB Learn mode</div>
+    <div class="sectionHint">Structured for Paper 1/2 AD–AS explanations and strong evaluation chains.</div>
+    ${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}
+    <div class="sectionTitle">Core revision modules</div>
+    ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
+    <div class="sectionTitle">IB Macro glossary</div>
+    <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
+    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
+}
 function renderAboutPanel(){
-  qs('#panelAbout').innerHTML='<div class="sectionTitle">About macrow</div><div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div><div class="learnCard"><label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label><button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button></div>';
+  qs('#panelAbout').innerHTML='<div class="sectionTitle">About macrow</div><div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div><div class="learnCard aboutActions"><label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label><button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button></div>';
   qs('#toggleAccess').checked=settings.accessibility;
   qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
   qs('#btnOpenShortcuts').onclick=openShortcuts;
@@ -148,6 +184,9 @@ function buildScenarioURL(s){
   const payload={name:s.name,params:s.params,category:s.category};
   return `${location.origin}${location.pathname}?scenario=${encodeURIComponent(encodeScenario(payload))}`;
 }
+function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
+function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
 function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}
 async function exportScenarioQr(){
   const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'};
@@ -155,27 +194,49 @@ async function exportScenarioQr(){
   const area=qs('#qrArea');
   area.classList.remove('hidden');
   area.innerHTML='';
+
+  if(!window.QRCode?.toCanvas){
+    area.innerHTML='<div class="sectionHint">QR library not loaded yet. Refresh and try again.</div>';
+    return;
+  }
+
   try{
     const canvas=document.createElement('canvas');
-    await QRCode.toCanvas(canvas,code,{width:300,margin:2,errorCorrectionLevel:'H'});
+    await QRCode.toCanvas(canvas,code,{width:320,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
     const ctx=canvas.getContext('2d');
-    const logo=new Image();
-    logo.crossOrigin='anonymous';
-    const logoLoaded=new Promise((resolve,reject)=>{logo.onload=resolve; logo.onerror=reject;});
-    logo.src='./assets/macrow-logo.png';
-    await logoLoaded;
-    const sz=64;
-    ctx.fillStyle='white';
-    ctx.fillRect((canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz);
-    ctx.drawImage(logo,(canvas.width-sz)/2,(canvas.height-sz)/2,sz,sz);
-    const dl=document.createElement('a');
-    dl.className='btn btn--ghost';
-    dl.download=`macrow-scenario-${Date.now()}.png`;
-    dl.href=canvas.toDataURL('image/png');
-    dl.textContent='Download QR image';
-    area.append(canvas,dl);
-  }catch{
-    area.innerHTML='<div class="sectionHint">Unable to generate QR with logo right now. Please try again.</div>';
+
+    try{
+      const logo=await loadImage('./assets/macrow-logo.png');
+      const sz=68;
+      const x=(canvas.width-sz)/2,y=(canvas.height-sz)/2;
+      ctx.fillStyle='white';
+      roundRect(ctx,x-4,y-4,sz+8,sz+8,14);
+      ctx.fill();
+      ctx.drawImage(logo,x,y,sz,sz);
+    }catch{}
+
+    const heading=document.createElement('div');
+    heading.className='sectionHint';
+    heading.textContent='QR ready. Scan or download.';
+
+    const downloadBtn=document.createElement('button');
+    downloadBtn.className='btn btn--ghost';
+    downloadBtn.textContent='Download QR image';
+    downloadBtn.onclick=()=>downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
+
+    const copyBtn=document.createElement('button');
+    copyBtn.className='btn btn--ghost';
+    copyBtn.textContent='Copy scenario URL';
+    copyBtn.onclick=async()=>{await navigator.clipboard?.writeText(code); copyBtn.textContent='Copied ✓';};
+
+    const row=document.createElement('div');
+    row.className='scenarioToolbar';
+    row.append(downloadBtn,copyBtn);
+
+    area.append(heading,canvas,row);
+    downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
+  }catch(e){
+    area.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
   }
 }
 let qrStream=null,qrLoopId=null;
