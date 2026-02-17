@@ -104,7 +104,24 @@ function renderLearnPanel(){
     ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
 }
 function renderAboutPanel(){
-  qs('#panelAbout').innerHTML='<div class="sectionTitle">About macrow</div><div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div><div class="learnCard aboutActions"><label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label><button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button></div>';
+  qs('#panelAbout').innerHTML=`
+    <div class="sectionTitle">About macrow</div>
+    <div class="sectionHint">Interactive IB Keynesian AD-AS simulator.</div>
+
+    <div class="learnCard">
+      <div class="policy__name">Links</div>
+      <div class="policy__text">
+        LinkedIn: <a class="link" href="https://linkedin.com/in/virajrao1" target="_blank" rel="noopener noreferrer">linkedin.com/in/virajrao1</a><br/>
+        BuyMeACoffee: <a class="link" href="https://buymeacoffee.com/virajrao" target="_blank" rel="noopener noreferrer">buymeacoffee.com/virajrao</a><br/>
+        Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a>
+      </div>
+    </div>
+
+    <div class="learnCard aboutActions">
+      <label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label>
+      <button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button>
+    </div>
+  `;
   qs('#toggleAccess').checked=settings.accessibility;
   qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
   qs('#btnOpenShortcuts').onclick=openShortcuts;
