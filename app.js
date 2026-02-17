@@ -150,6 +150,7 @@ function renderMainChart(){const svg=qs('#chartSvg'); svg.innerHTML=''; const W=
 rect(svg,0,0,W,H,18,'rgba(255,255,255,0.02)'); [30,50,70,90,110].forEach(P=>{line(svg,pad.l,y(P),W-pad.r,y(P),'rgba(148,163,184,0.10)',1); if(settings.showAxisNumbers) text(svg,pad.l-10,y(P)+4,String(P),'end','rgba(148,163,184,0.70)',12);}); [60,90,120,150,180].forEach(Y=>{line(svg,x(Y),pad.t,x(Y),H-pad.b,'rgba(148,163,184,0.08)',1); if(settings.showAxisNumbers) text(svg,x(Y),H-pad.b+22,String(Y),'middle','rgba(148,163,184,0.70)',12);}); line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.70)',3); line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.70)',3); text(svg,(pad.l+(W-pad.r))/2,H-18,'Real GDP ($)','middle','rgba(226,232,240,0.92)',15,true); textRot(svg,22,(pad.t+(H-pad.b))/2,'Average Price Level ($)',-90,'middle','rgba(226,232,240,0.92)',15,true);
 const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe}, base=computeFromParams(defaults.params);
 drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true); drawCurveSet(svg,x,y,cur,null,false); if(state.compare.on && state.compare.snapshot){drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,'6 7');}
+drawEquilibriumGuides(svg,x,y,equilibrium(base),equilibrium(cur),pad,H);
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
 function drawCurveSet(svg,x,y,v,tint,muted=false,dash){drawLRAS(svg,x,v.yFe,20,482,tint||'rgba(34,197,94,0.70)',dash||'6 6'); const ad=adLineSegment(v.adShiftY).seg; if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash); const as=ASshape(v); strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash); labelOnAD(svg,x,y,v.adShiftY,tint); labelOnAS(svg,x,y,as,tint); labelOnLRAS(svg,x,v.yFe,tint);}
@@ -170,6 +171,29 @@ function renderState(base,cur){
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
 function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const items=[{label:'AD',text:'Aggregate Demand: C + I + G + (X−M)',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'AS',text:'Short-run Aggregate Supply',x:ASshape(cur).yKink+8,y:60},{label:'LRAS',text:'Long-run potential output (Yf)',x:cur.yFe,y:95},{label:'X axis',text:'Real output (GDP)',x:120,y:22},{label:'Y axis',text:'Average price level',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r',8); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+
+function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
+  const drawPoint=(pt,tag,color)=>{
+    line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
+    line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
+    point(svg,x(pt.y),y(pt.p),5,color);
+    text(svg,pad.l-14,y(pt.p)+4,`P${tag}`,'end',color,14,true);
+    text(svg,x(pt.y),H-pad.b+38,`Y${tag}`,'middle',color,14,true);
+  };
+
+  const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
+  drawPoint(baseEq,'1',baseColor);
+  drawPoint(curEq,'2',curColor);
+
+  if(Math.abs(curEq.p-baseEq.p)>0.5){
+    line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
+    text(svg,pad.l-60,(y(baseEq.p)+y(curEq.p))/2+4,'P1 → P2','end','rgba(244,114,182,0.95)',12,true);
+  }
+  if(Math.abs(curEq.y-baseEq.y)>0.5){
+    line(svg,x(baseEq.y),H-pad.b+50,x(curEq.y),H-pad.b+50,'rgba(56,189,248,0.95)',2.1);
+    text(svg,(x(baseEq.y)+x(curEq.y))/2,H-pad.b+69,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
+  }
+}
 
 function openShortcuts(){const ov=qs('#shortcutsOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); qs('#shortcutsList').innerHTML=KEYBOARD_SHORTCUTS.map(s=>`<div class='learnCard'><b>${escapeHtml(s.key)}</b> — ${escapeHtml(s.desc)}</div>`).join('');}
 qs('#shortcutsClose').onclick=()=>{qs('#shortcutsOverlay').classList.add('hidden'); qs('#shortcutsOverlay').setAttribute('aria-hidden','true');};
@@ -305,6 +329,7 @@ function line(svg,x1,y1,x2,y2,s,w,d){const el=document.createElementNS('http://w
 function text(svg,x,y,s,a,f,z,b=false){const el=document.createElementNS('http://www.w3.org/2000/svg','text'); [['x',x],['y',y],['text-anchor',a],['fill',f],['font-size',z],['font-family','ui-sans-serif']].forEach(([k,v])=>el.setAttribute(k,v)); if(b)el.setAttribute('font-weight','900'); el.textContent=s; svg.appendChild(el);} 
 function textRot(svg,x,y,s,d,a,f,z,b=false){const el=document.createElementNS('http://www.w3.org/2000/svg','text'); [['x',x],['y',y],['text-anchor',a],['fill',f],['font-size',z],['font-family','ui-sans-serif'],['transform',`rotate(${d} ${x} ${y})`]].forEach(([k,v])=>el.setAttribute(k,v)); if(b)el.setAttribute('font-weight','900'); el.textContent=s; svg.appendChild(el);} 
 function strokePath(svg,d,s,w,da){const el=document.createElementNS('http://www.w3.org/2000/svg','path'); [['d',d],['fill','none'],['stroke',s],['stroke-width',w],['stroke-linecap','round'],['stroke-linejoin','round']].forEach(([k,v])=>el.setAttribute(k,v)); if(da)el.setAttribute('stroke-dasharray',da); svg.appendChild(el);} 
+function point(svg,cx,cy,r,fill){const el=document.createElementNS('http://www.w3.org/2000/svg','circle'); [['cx',cx],['cy',cy],['r',r],['fill',fill],['stroke','rgba(15,23,42,0.75)'],['stroke-width','1.5']].forEach(([k,v])=>el.setAttribute(k,v)); svg.appendChild(el);} 
 function pathFromPoints(x,y,pts){return `M ${pts.map(([Y,P])=>`${x(Y).toFixed(1)} ${y(P).toFixed(1)}`).join(' L ')}`;} function pathFromSegment(x,y,s){return `M ${x(s[0][0]).toFixed(1)} ${y(s[0][1]).toFixed(1)} L ${x(s[1][0]).toFixed(1)} ${y(s[1][1]).toFixed(1)}`;}
 function boxedLabel(svg,x,y,label,color){const w=Math.max(36,label.length*7.2)+20,h=27,bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); [['x',x-w/2],['y',y-h/2],['width',w],['height',h],['rx',12],['fill','rgba(11,18,32,0.7)'],['stroke',color||'rgba(255,255,255,.8)'],['stroke-width','2']].forEach(([k,v])=>bg.setAttribute(k,v)); svg.appendChild(bg); text(svg,x,y+4,label,'middle','rgba(226,232,240,0.95)',13,true);} 
 function drawLRAS(svg,x,yFe,t,b,s,d){line(svg,x(yFe),t,x(yFe),b,s,3.5,d);} function labelOnLRAS(svg,x,yFe,c){boxedLabel(svg,x(yFe)+54,72,'LRAS',c||'rgba(34,197,94,.9)');} function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return; const Y=lerp(seg[0][0],seg[1][0],.72),P=lerp(seg[0][1],seg[1][1],.72); boxedLabel(svg,x(Y)+20,y(P)-20,'AD',c||'rgba(239,68,68,.95)');} function labelOnAS(svg,x,y,as,c){boxedLabel(svg,x(as.yKink+10)+44,y(as.pFlat+5)-18,'AS',c||'rgba(59,130,246,.95)');}
