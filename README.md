@@ -14,9 +14,13 @@ macrow helps students and teachers:
 - Policy cards with replay history and compare mode
 - Parameter sliders for core macro drivers
 - Learn Hub with exam roadmap, glossary, and classroom investigation generator
+- Assessment tab: formative quizzes + competency progression + practice prompts (local storage)
+- Teacher tab: class list, assignment creation from current scenario, local analytics
 - Scenario manager (save/load/delete/import/export/share)
 - Export chart as PNG
 - Keyboard shortcuts and accessibility mode
+- Better resilience: loading states, status notifications, global error handling
+- Low-bandwidth optimization: lazy-loaded QR libraries + reduced visual mode on data-saver/2G
 - PWA support (installable + offline cache via service worker)
 
 ## Run locally
@@ -38,11 +42,20 @@ http://127.0.0.1:4173
 - `p` → Policies tab
 - `r` → Parameters tab
 - `l` → Learn tab
+- `q` → Assess tab
+- `t` → Teacher tab
 - `a` → About tab
 - `s` → Scenario manager
 - `x` → Reset parameters
 - `?` → Shortcuts modal
 - `Esc` → Close overlays
+
+## Tests
+
+```bash
+npm install
+npm test
+```
 
 ## Educational intent
 

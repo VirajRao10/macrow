@@ -1,9 +1,12 @@
-const CACHE = "macrow-v20";
+const CACHE = "macrow-v21";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./js/calculations.js",
+  "./js/storage.js",
+  "./js/assessments.js",
   "./manifest.webmanifest",
   "./assets/macrow-logo.png"
 ];

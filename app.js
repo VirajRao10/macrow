@@ -1,11 +1,15 @@
+import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment } from './js/calculations.js';
+import { loadProgress, saveProgress, loadTeacher, saveTeacher } from './js/storage.js';
+import { buildQuizQuestions, buildPracticeFromConcepts } from './js/assessments.js';
+
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));
-const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)); const lerp=(a,b,t)=>a+(b-a)*t;
+const GRAPH=C_GRAPH; const defaults=C_DEFAULTS;
 const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorAll(s)); const deepCopy=x=>JSON.parse(JSON.stringify(x));
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"a",desc:"About tab"},
+  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab"},{key:"t",desc:"Teacher tab"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
@@ -53,29 +57,14 @@ const GLOSSARY=[
   {term:"Policy time lags",blurb:"Recognition, decision, and impact delays that reduce precision of stabilization policy."}
 ];
 
-const GRAPH={Ymin:40,Ymax:180,Pmin:20,Pmax:120,adIntercept:80,adSlope:0.75,adPivotY:120,pFlat:55,yFeBase:120,kinkGap:20,curveRise:25};
-const defaults={params:{govSpending:50,taxRate:25,interestRate:3.5,productionCosts:50,productivity:50,supplySideReform:50}};
 const settings={showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",accessibility:(localStorage.getItem("macrow_access")??"0")==="1"};
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
-
-function computeFromParams(p){
-  const g=(p.govSpending-50)*0.6,t=(25-p.taxRate)*0.9,i=(3.5-p.interestRate)*4.0;
-  const adShiftY=clamp(g+t+i,-60,60);
-  const supplyBoost=(p.supplySideReform-50)*0.3;
-  const asShiftP=clamp((p.productionCosts-50)*0.6 - supplyBoost,-22,22);
-  const yFe=clamp(GRAPH.yFeBase + (p.productivity-50)+(p.supplySideReform-50)*0.5,70,160);
-  return {adShiftY,asShiftP,yFe};
-}
-const AD=(Y,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return GRAPH.adIntercept-GRAPH.adSlope*(Y-Y0)};
-const invertAD_Y=(P,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return Y0+(GRAPH.adIntercept-P)/GRAPH.adSlope};
-function ASshape({asShiftP,yFe}){const outputShift=asShiftP*3,shiftedYFe=clamp(yFe-outputShift,GRAPH.Ymin+30,GRAPH.Ymax-10),pFlat=GRAPH.pFlat,yKink=clamp(shiftedYFe-GRAPH.kinkGap,GRAPH.Ymin+8,shiftedYFe-10),pEnd=clamp(pFlat+GRAPH.curveRise,GRAPH.Pmin+10,GRAPH.Pmax-10);const pts=[[GRAPH.Ymin,pFlat],[yKink,pFlat]]; for(let i=1;i<=60;i++){const t=i/60,y=lerp(yKink,shiftedYFe,t),e=(Math.exp(6*t)-1)/(Math.exp(6)-1),p=pFlat+e*(pEnd-pFlat);pts.push([y,p]);} pts.push([shiftedYFe,pEnd],[shiftedYFe,GRAPH.Pmax-6]); return {pts,yKink,yFe:shiftedYFe,pFlat,pEnd};}
-function equilibrium(v){const as=ASshape(v),asP=Y=>Y<=as.yKink?as.pFlat:(Y>=as.yFe?as.pEnd:as.pFlat+((Math.exp(6*clamp((Y-as.yKink)/(as.yFe-as.yKink),0,1))-1)/(Math.exp(6)-1))*(as.pEnd-as.pFlat)); let pY=GRAPH.Ymin,pH=AD(pY,v.adShiftY)-asP(pY);for(let i=1;i<=420;i++){const Y=lerp(GRAPH.Ymin,as.yFe,i/420),h=AD(Y,v.adShiftY)-asP(Y); if(pH*h<0){let lo=pY,hi=Y; for(let k=0;k<56;k++){const m=(lo+hi)/2,hm=AD(m,v.adShiftY)-asP(m); if((AD(lo,v.adShiftY)-asP(lo))*hm<0) hi=m; else lo=m;} const y=(lo+hi)/2; return {y,p:AD(y,v.adShiftY)};} pY=Y;pH=h;} return {y:v.yFe,p:AD(v.yFe,v.adShiftY)};}
-function clipLineToBox(m,b,box){const {Ymin,Ymax,Pmin,Pmax}=box,pts=[]; [[Ymin,m*Ymin+b],[Ymax,m*Ymax+b]].forEach(([Y,P])=>{if(P>=Pmin&&P<=Pmax)pts.push([Y,P])}); if(Math.abs(m)>1e-9){const y1=(Pmin-b)/m,y2=(Pmax-b)/m; if(y1>=Ymin&&y1<=Ymax)pts.push([y1,Pmin]); if(y2>=Ymin&&y2<=Ymax)pts.push([y2,Pmax]);} if(pts.length<2) return null; return [pts[0],pts[1]];}
-const adLineSegment=adShiftY=>{const m=-GRAPH.adSlope,b=GRAPH.adIntercept+GRAPH.adSlope*(GRAPH.adPivotY+adShiftY); return {m,b,seg:clipLineToBox(m,b,GRAPH)}};
+let progress=loadProgress();
+let teacherState=loadTeacher();
 
 const navButtons=qsa('.navBtn');
-function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
+function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","assess","teacher","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
 
 const policyCards=[
@@ -168,6 +157,63 @@ function updateLearnSnapshot(){
     <div class="policy__text">Sentence starter: <i>Identify which curve shifts first (AD via demand factors or AS via cost/productivity factors), then explain how Y and P move at the new equilibrium.</i></div>`;
 }
 
+function renderAssessPanel(){
+  const root=qs('#panelAssess');
+  const questions=buildQuizQuestions(GLOSSARY);
+  const practice=buildPracticeFromConcepts(GLOSSARY);
+  const attempts=progress.quizAttempts||[];
+  const avg=attempts.length?(attempts.reduce((a,b)=>a+b.score,0)/attempts.length).toFixed(1):'—';
+  root.innerHTML=`
+    <div class="sectionTitle">Formative quiz + progress dashboard</div>
+    <div class="learnCard"><b>Attempts:</b> ${attempts.length} &nbsp; <b>Average score:</b> ${avg}%</div>
+    <div class="sectionHint">Uses existing Macrow glossary terms only. Instant feedback is shown after each response.</div>
+    <div id="quizRoot"></div>
+    <div class="sectionTitle">Competency-based path</div>
+    <div class="learnCard" id="competencyRoot"></div>
+    <div class="sectionTitle">Practice prompts</div>
+    ${practice.map(p=>`<div class="learnCard"><b>${p.competency}</b><div class="policy__text">${escapeHtml(p.prompt)}</div></div>`).join('')}
+  `;
+  const quizHost=qs('#quizRoot');
+  quizHost.innerHTML=questions.map((q,i)=>`<div class="learnCard"><div><b>Q${i+1}.</b> ${escapeHtml(q.prompt)}</div><div class="scenarioToolbar">${q.options.map(o=>`<button class="btn btn--ghost" data-q="${q.id}" data-a="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('')}</div><div id="fb_${q.id}" class="policy__text"></div></div>`).join('');
+  quizHost.onclick=e=>{
+    const b=e.target.closest('[data-q]'); if(!b) return;
+    const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
+    const ok=b.dataset.a===q.answer;
+    qs(`#fb_${q.id}`).textContent=ok?`✅ Correct. Competency: ${q.competency}`:`❌ Not quite. Correct answer: ${q.answer}`;
+    progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+(ok?1:0);
+    saveProgress(progress);
+  };
+  qs('#competencyRoot').innerHTML=['AD-AS Foundations','Policy Analysis','Evaluation','Diagram Reasoning','Evaluation Writing'].map(k=>`<div class="policy__text"><b>${k}</b>: ${progress.competencies?.[k]||0} mastery points</div>`).join('');
+  qs('#competencyRoot').insertAdjacentHTML('beforeend','<button id="btnSubmitQuiz" class="btn btn--primary">Record quiz attempt (auto score from feedback)</button>');
+  qs('#btnSubmitQuiz').onclick=()=>{
+    const score=Math.min(100,Math.round((Object.values(progress.competencies||{}).reduce((a,b)=>a+b,0)%10)/10*100));
+    progress.quizAttempts=[...(progress.quizAttempts||[]),{ts:Date.now(),score}].slice(-30);
+    saveProgress(progress);
+    renderAssessPanel();
+  };
+}
+
+function renderTeacherPanel(){
+  const root=qs('#panelTeacher');
+  const classes=teacherState.classes||[];
+  const assignments=teacherState.assignments||[];
+  root.innerHTML=`
+    <div class="sectionTitle">Teacher tools (local classroom mode)</div>
+    <div class="sectionHint">Create classes, track local student progress, and build assignments from existing AD-AS scenarios.</div>
+    <div class="learnCard"><input id="className" class="textInput" placeholder="Class name (e.g. IB Econ HL 12A)"/><button id="btnAddClass" class="btn btn--primary">Add class</button></div>
+    <div id="classList">${classes.map(c=>`<div class="learnCard"><b>${escapeHtml(c.name)}</b> — students: ${c.students||0}</div>`).join('')||'<div class="sectionHint">No classes yet.</div>'}</div>
+    <div class="learnCard"><input id="assignName" class="textInput" placeholder="Assignment title"/><button id="btnCreateAssignment" class="btn btn--ghost">Create assignment from current scenario</button></div>
+    <div id="assignmentList">${assignments.map(a=>`<div class="learnCard"><b>${escapeHtml(a.name)}</b><div class="policy__text">Scenario category: ${escapeHtml(a.category||'custom')}</div></div>`).join('')}</div>
+    <div class="learnCard" id="teacherAnalytics"></div>
+  `;
+  qs('#btnAddClass').onclick=()=>{const name=qs('#className').value.trim(); if(!name)return; teacherState.classes=[{id:crypto.randomUUID(),name,students:0},...classes]; saveTeacher(teacherState); renderTeacherPanel();};
+  qs('#btnCreateAssignment').onclick=()=>{const name=qs('#assignName').value.trim()||`Assignment ${assignments.length+1}`; teacherState.assignments=[{id:crypto.randomUUID(),name,params:deepCopy(state.params),category:'AD-AS'} ,...assignments]; saveTeacher(teacherState); renderTeacherPanel();};
+  const totalAssignments=assignments.length;
+  const totalClasses=classes.length;
+  const avgQuiz=(progress.quizAttempts||[]).length?Math.round((progress.quizAttempts||[]).reduce((a,b)=>a+b.score,0)/(progress.quizAttempts||[]).length):0;
+  qs('#teacherAnalytics').innerHTML=`<div class="policy__name">Class analytics</div><div class="policy__text">Classes: <b>${totalClasses}</b>, Assignments: <b>${totalAssignments}</b>, Student quiz average (local): <b>${avgQuiz}%</b>.</div>`;
+}
+
 function renderAboutPanel(){
   qs('#panelAbout').innerHTML=`
     <div class="sectionTitle">About macrow</div>
@@ -180,6 +226,10 @@ function renderAboutPanel(){
         BuyMeACoffee: <a class="link" href="https://buymeacoffee.com/virajrao" target="_blank" rel="noopener noreferrer">buymeacoffee.com/virajrao</a><br/>
         Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a>
       </div>
+    </div>
+
+    <div class="learnCard">
+      <div class="policy__text"><b>Microw - Coming Soon</b> (Microeconomics learning platform)</div>
     </div>
 
     <div class="learnCard aboutActions">
@@ -302,6 +352,34 @@ function initScenarioManager(){qs('#btnScenarios').onclick=()=>{qs('#scenarioOve
 function closeScenarioModal(){qs('#scenarioOverlay').classList.add('hidden'); qs('#scenarioOverlay').setAttribute('aria-hidden','true'); stopQrScanner();}
 function saveScenario(){const name=qs('#scenarioName').value.trim()||`Scenario ${scenarios.length+1}`,category=qs('#scenarioCategory').value; scenarios.unshift({id:crypto.randomUUID(),name,category,params:deepCopy(state.params),createdAt:Date.now()}); persistScenarios(); renderScenarioList();}
 function persistScenarios(){localStorage.setItem(SCENARIO_STORAGE_KEY,JSON.stringify(scenarios));}
+
+function showStatus(msg,error=false,ms=2400){
+  const box=qs('#appStatus');
+  if(!box) return;
+  box.textContent=msg;
+  box.classList.remove('hidden');
+  box.classList.toggle('error',error);
+  clearTimeout(showStatus.t);
+  showStatus.t=setTimeout(()=>box.classList.add('hidden'),ms);
+}
+
+async function ensureScript(src){
+  if([...document.scripts].some(s=>s.src.includes(src))) return;
+  await new Promise((resolve,reject)=>{
+    const tag=document.createElement('script');
+    tag.src=src; tag.defer=true;
+    tag.onload=resolve; tag.onerror=()=>reject(new Error(`Failed ${src}`));
+    document.head.appendChild(tag);
+  });
+}
+
+async function ensureQrLibs(){
+  if(window.QRCode && window.jsQR) return;
+  showStatus('Loading QR tools for this action…');
+  await ensureScript('https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js');
+  await ensureScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
+}
+
 function renderScenarioList(){const root=qs('#scenarioListRoot'); root.innerHTML=scenarios.map(s=>`<div class="scenarioItem"><div><b>${escapeHtml(s.name)}</b><div class="sectionHint">${escapeHtml(s.category)}</div></div><div><button class="btn btn--ghost" data-load="${s.id}">Load</button><button class="btn btn--ghost" data-del="${s.id}">Delete</button></div></div>`).join('')||'<div class="sectionHint">No saved scenarios yet.</div>'; root.onclick=e=>{const l=e.target.closest('[data-load]'),d=e.target.closest('[data-del]'); if(l){const s=scenarios.find(x=>x.id===l.dataset.load); if(s){state.params=deepCopy(s.params); onParamsChanged(true);}} if(d){scenarios=scenarios.filter(x=>x.id!==d.dataset.del); persistScenarios(); renderScenarioList();}};}
 function exportScenariosJson(){const blob=new Blob([JSON.stringify(scenarios,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='macrow-scenarios.json'; a.click();}
 function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){const safe=data.filter(x=>x&&typeof x==='object'&&x.params&&typeof x.params==='object').map(x=>({id:crypto.randomUUID(),name:String(x.name||'Imported scenario'),category:String(x.category||'custom'),params:deepCopy({...defaults.params,...x.params}),createdAt:Date.now()})); scenarios=safe.concat(scenarios); persistScenarios(); renderScenarioList();} else {alert('Invalid scenario format');}}catch{alert('Invalid JSON')}}; r.readAsText(f); e.target.value='';}
@@ -336,12 +414,8 @@ async function exportScenarioQr(){
   area.classList.remove('hidden');
   area.innerHTML='';
 
-  if(!window.QRCode?.toCanvas){
-    area.innerHTML='<div class="sectionHint">QR library not loaded yet. Refresh and try again.</div>';
-    return;
-  }
-
   try{
+    await ensureQrLibs();
     const canvas=document.createElement('canvas');
     await QRCode.toCanvas(canvas,code,{width:320,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
     const ctx=canvas.getContext('2d');
@@ -385,6 +459,7 @@ async function startQrScanner(){
   area.classList.remove('hidden');
   stopQrScanner();
   try{
+    await ensureQrLibs();
     const isMobile=window.matchMedia('(pointer:coarse)').matches;
     qrStream=await navigator.mediaDevices.getUserMedia({video:isMobile?{facingMode:{ideal:'environment'}}:true});
     video.srcObject=qrStream;
@@ -417,7 +492,7 @@ function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q')setTab('assess'); if(e.key==='t')setTab('teacher'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
@@ -439,4 +514,39 @@ function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.y
 
 function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
 
-function init(){document.body.classList.toggle('accessibility-mode',settings.accessibility); renderPoliciesPanel(); renderParametersPanel(); renderLearnPanel(); renderAboutPanel(); initScenarioManager(); setTab('policies'); showWelcomeIfNeeded(); applyScenarioFromUrl(); onParamsChanged(true);} init();
+function initResilience(){
+  window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
+  window.addEventListener('unhandledrejection',()=>showStatus('Network/action failed. Please retry.',true,5000));
+}
+
+function initPerformanceMonitoring(){
+  if(navigator.connection?.saveData || /2g/.test(navigator.connection?.effectiveType||'')) document.body.classList.add('low-bandwidth');
+  if('PerformanceObserver' in window){
+    try{
+      const obs=new PerformanceObserver((list)=>{
+        for(const e of list.getEntries()){
+          if(e.entryType==='longtask' && e.duration>120) showStatus('Performance tip: device is under load, reducing visuals.',false,1800);
+        }
+      });
+      obs.observe({entryTypes:['longtask']});
+    }catch{}
+  }
+}
+
+function init(){
+  initResilience();
+  initPerformanceMonitoring();
+  document.body.classList.toggle('accessibility-mode',settings.accessibility);
+  renderPoliciesPanel();
+  renderParametersPanel();
+  renderLearnPanel();
+  renderAssessPanel();
+  renderTeacherPanel();
+  renderAboutPanel();
+  initScenarioManager();
+  setTab('policies');
+  showWelcomeIfNeeded();
+  applyScenarioFromUrl();
+  onParamsChanged(true);
+}
+init();

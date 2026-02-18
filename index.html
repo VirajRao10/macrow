@@ -121,6 +121,8 @@
         <div id="panelPolicies"></div>
         <div id="panelParameters" class="hidden"></div>
         <div id="panelLearn" class="hidden"></div>
+        <div id="panelAssess" class="hidden"></div>
+        <div id="panelTeacher" class="hidden"></div>
         <div id="panelAbout" class="hidden"></div>
       </aside>
     </section>
@@ -131,6 +133,8 @@
     <button class="navBtn navBtn--active" data-tab="policies"><span class="navIcon">📘</span><span class="navText">Policies</span></button>
     <button class="navBtn" data-tab="parameters"><span class="navIcon">🎛️</span><span class="navText">Parameters</span></button>
     <button class="navBtn" data-tab="learn"><span class="navIcon">🎓</span><span class="navText">Learn</span></button>
+    <button class="navBtn" data-tab="assess"><span class="navIcon">🧪</span><span class="navText">Assess</span></button>
+    <button class="navBtn" data-tab="teacher"><span class="navIcon">🧑‍🏫</span><span class="navText">Teacher</span></button>
     <button class="navBtn" data-tab="about"><span class="navIcon">ℹ️</span><span class="navText">About</span></button>
   </nav>
 
@@ -228,14 +232,13 @@
   </div>
 
   <div id="chartTooltip" class="chartTooltip hidden" role="tooltip"></div>
+  <div id="appStatus" class="appStatus hidden" role="status" aria-live="polite"></div>
 
   <footer class="footer">
     <div class="footerLeft">macrow — Interactive IB Economics simulator for AD–AS analysis</div>
     <div class="footerRight">Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a></div>
   </footer>
 
-  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-  <script defer src="./app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
