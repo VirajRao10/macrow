@@ -45,7 +45,10 @@ a.link{ color: rgba(226,232,240,0.92); text-decoration: underline; text-underlin
 .chipsRow{ display:flex; align-items:center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .chips{ display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
 .chip{ padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.06); color: var(--text); font-weight: 800; font-size: 13px; min-width: 150px; }
-.stateLabel{ font-size: 13px; color: var(--muted); font-weight: 700; }
+.stateLabel{ font-size: 13px; color: var(--muted); font-weight: 700; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+.stateLabel[data-state="recessionary"]{ background: rgba(59,130,246,0.12); color: rgba(191,219,254,0.95); }
+.stateLabel[data-state="inflationary"]{ background: rgba(239,68,68,0.14); color: rgba(254,202,202,0.95); }
+.stateLabel[data-state="pressure"]{ background: rgba(245,158,11,0.14); color: rgba(254,240,138,0.95); }
 .eqSummary{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
 .eqSummary__stat{ padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.11); }
 .eqSummary__label{ font-size: 12px; color: var(--muted2); font-weight: 800; }

@@ -5,8 +5,8 @@ const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},
-  {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset"}
+  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"a",desc:"About tab"},
+  {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
   "AD shifts right usually raise real output and the price level in the short run.",
@@ -165,7 +165,7 @@ function updateLearnSnapshot(){
   host.innerHTML=`
     <div class="policy__name">Live classroom snapshot</div>
     <div class="policy__text">Y = <b>${eq.y.toFixed(1)}</b>, P = <b>${eq.p.toFixed(1)}</b>, Yf = <b>${cur.yFe.toFixed(1)}</b>, output gap = <b>${outputGap>0?'+':''}${outputGap.toFixed(1)}</b>.</div>
-    <div class="policy__text">Sentence starter: <i>The policy shifts ${state.adShiftY>=0?'AD':'AS'} ${state.adShiftY>=0?'right/left depending on demand conditions':'through production-cost conditions'}, so equilibrium output and price level change because...</i></div>`;
+    <div class="policy__text">Sentence starter: <i>Identify which curve shifts first (AD via demand factors or AS via cost/productivity factors), then explain how Y and P move at the new equilibrium.</i></div>`;
 }
 
 function renderAboutPanel(){
@@ -233,7 +233,17 @@ function renderState(base,cur){
   const delta=v=>`Δ ${v>0?'+':''}${num(v)}`;
   qs('#changeChips').innerHTML='';
   qs('#changeChips').append(chip(dY,'Output'),chip(dP,'Prices'));
-  qs('#gapLabel').textContent=c.y<cur.yFe-2?'State: recessionary gap':(c.p>70?'State: inflationary pressure':'State: near full employment');
+
+  const gap=c.y-cur.yFe;
+  const gapPercent=(gap/cur.yFe)*100;
+  let stateText='Near full-employment equilibrium';
+  let stateClass='near-equilibrium';
+  if(gap<-2){stateText=`Recessionary gap: ${Math.abs(gapPercent).toFixed(1)}% below potential output`; stateClass='recessionary';}
+  else if(gap>2){stateText=`Inflationary gap: ${gapPercent.toFixed(1)}% above potential output`; stateClass='inflationary';}
+  else if(c.p>75){stateText='Rising price pressure near potential output'; stateClass='pressure';}
+  qs('#gapLabel').textContent=stateText;
+  qs('#gapLabel').setAttribute('data-state',stateClass);
+
   qs('#statOutputValue').textContent=`Y ${num(c.y)}`;
   qs('#statPriceValue').textContent=`P ${num(c.p)}`;
   qs('#statPotentialValue').textContent=`Yf ${num(cur.yFe)}`;
@@ -243,7 +253,7 @@ function renderState(base,cur){
 }
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
-function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'AD',text:'Aggregate Demand: C + I + G + (X−M)',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'AS',text:'Short-run Aggregate Supply',x:as.yKink+8,y:60},{label:'Yf',text:'Potential output marker at the Keynesian AS kink',x:as.yKink,y:as.pFlat},{label:'X axis',text:'Real output (GDP)',x:120,y:22},{label:'Y axis',text:'Average price level',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','9'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output marker at the Keynesian AS kink.',x:as.yKink,y:as.pFlat},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
@@ -283,28 +293,7 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   }
 }
 
-function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
-  const drawPoint=(pt,tag,color)=>{
-    line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
-    line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
-    point(svg,x(pt.y),y(pt.p),5,color);
-    text(svg,pad.l-14,y(pt.p)+4,`P${tag}`,'end',color,14,true);
-    text(svg,x(pt.y),H-pad.b+38,`Y${tag}`,'middle',color,14,true);
-  };
 
-  const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
-  drawPoint(baseEq,'1',baseColor);
-  drawPoint(curEq,'2',curColor);
-
-  if(Math.abs(curEq.p-baseEq.p)>0.5){
-    line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
-    text(svg,pad.l-60,(y(baseEq.p)+y(curEq.p))/2+4,'P1 → P2','end','rgba(244,114,182,0.95)',12,true);
-  }
-  if(Math.abs(curEq.y-baseEq.y)>0.5){
-    line(svg,x(baseEq.y),H-pad.b+50,x(curEq.y),H-pad.b+50,'rgba(56,189,248,0.95)',2.1);
-    text(svg,(x(baseEq.y)+x(curEq.y))/2,H-pad.b+69,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
-  }
-}
 
 function openShortcuts(){const ov=qs('#shortcutsOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); qs('#shortcutsList').innerHTML=KEYBOARD_SHORTCUTS.map(s=>`<div class='learnCard'><b>${escapeHtml(s.key)}</b> — ${escapeHtml(s.desc)}</div>`).join('');}
 qs('#shortcutsClose').onclick=()=>{qs('#shortcutsOverlay').classList.add('hidden'); qs('#shortcutsOverlay').setAttribute('aria-hidden','true');};
@@ -315,7 +304,7 @@ function saveScenario(){const name=qs('#scenarioName').value.trim()||`Scenario $
 function persistScenarios(){localStorage.setItem(SCENARIO_STORAGE_KEY,JSON.stringify(scenarios));}
 function renderScenarioList(){const root=qs('#scenarioListRoot'); root.innerHTML=scenarios.map(s=>`<div class="scenarioItem"><div><b>${escapeHtml(s.name)}</b><div class="sectionHint">${escapeHtml(s.category)}</div></div><div><button class="btn btn--ghost" data-load="${s.id}">Load</button><button class="btn btn--ghost" data-del="${s.id}">Delete</button></div></div>`).join('')||'<div class="sectionHint">No saved scenarios yet.</div>'; root.onclick=e=>{const l=e.target.closest('[data-load]'),d=e.target.closest('[data-del]'); if(l){const s=scenarios.find(x=>x.id===l.dataset.load); if(s){state.params=deepCopy(s.params); onParamsChanged(true);}} if(d){scenarios=scenarios.filter(x=>x.id!==d.dataset.del); persistScenarios(); renderScenarioList();}};}
 function exportScenariosJson(){const blob=new Blob([JSON.stringify(scenarios,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='macrow-scenarios.json'; a.click();}
-function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){scenarios=data.concat(scenarios); persistScenarios(); renderScenarioList();}}catch{alert('Invalid JSON')}}; r.readAsText(f);}
+function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){const safe=data.filter(x=>x&&typeof x==='object'&&x.params&&typeof x.params==='object').map(x=>({id:crypto.randomUUID(),name:String(x.name||'Imported scenario'),category:String(x.category||'custom'),params:deepCopy({...defaults.params,...x.params}),createdAt:Date.now()})); scenarios=safe.concat(scenarios); persistScenarios(); renderScenarioList();} else {alert('Invalid scenario format');}}catch{alert('Invalid JSON')}}; r.readAsText(f); e.target.value='';}
 function encodeScenario(s){
   const bytes=new TextEncoder().encode(JSON.stringify(s));
   let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
@@ -339,7 +328,7 @@ function buildScenarioURL(s){
 function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
-function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}
+async function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
 async function exportScenarioQr(){
   const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'};
   const code=buildScenarioURL(s);
@@ -386,7 +375,6 @@ async function exportScenarioQr(){
     row.append(downloadBtn,copyBtn);
 
     area.append(heading,canvas,row);
-    downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
   }catch(e){
     area.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
   }
@@ -429,7 +417,7 @@ function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='?'){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
@@ -449,6 +437,6 @@ function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yKink),py=y(as
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=()=>{if(qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true');}; qs('#welcomeClose').onclick=close; qs('#welcomeOk').onclick=close;}
+function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
 
 function init(){document.body.classList.toggle('accessibility-mode',settings.accessibility); renderPoliciesPanel(); renderParametersPanel(); renderLearnPanel(); renderAboutPanel(); initScenarioManager(); setTab('policies'); showWelcomeIfNeeded(); applyScenarioFromUrl(); onParamsChanged(true);} init();

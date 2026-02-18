@@ -1,22 +1,53 @@
-# macrow improvements
+# macrow
 
-Implemented:
-- Scenario manager modal with save/load/delete, category tags, JSON import/export.
-- Scenario sharing via URL + QR export (with center logo overlay) and mobile QR scan via WebRTC + jsQR.
-- Learn tab with glossary + visible LEARN_TIPS, plus graph hover tooltips.
-- Policy visualization upgrades: split-view compare, policy history replay, and extra supply-side tools.
-- Mobile/touch optimizations: swipe-to-adjust sliders, touch-friendly controls, haptic feedback.
-- Accessibility additions: accessibility mode, expanded keyboard shortcuts and help modal, stronger ARIA labels.
+Interactive **IBDP Economics** learning tool for Keynesian **AD–AS** analysis.
 
-## QR scanner notes
-- Scanner is mobile-focused (`pointer: coarse` check).
-- Desktop users are prompted to use import/share fallback.
+macrow helps students and teachers:
+- visualize AD, SRAS, and potential output (Yf)
+- test fiscal, monetary, and supply-side policies
+- compare baseline vs policy outcomes
+- practice exam-ready evaluation with structured prompts
+- save/share scenarios using URL, JSON, and QR
+
+## What’s included
+
+- Policy cards with replay history and compare mode
+- Parameter sliders for core macro drivers
+- Learn Hub with exam roadmap, glossary, and classroom investigation generator
+- Scenario manager (save/load/delete/import/export/share)
+- Export chart as PNG
+- Keyboard shortcuts and accessibility mode
+- PWA support (installable + offline cache via service worker)
+
+## Run locally
+
+Because this is a static web app, run a local server from the repository root:
+
+```bash
+python3 -m http.server 4173
+```
+
+Then open:
+
+```text
+http://127.0.0.1:4173
+```
 
 ## Keyboard shortcuts
-- `p` policies
-- `r` parameters
-- `l` learn
-- `a` accessibility
-- `s` scenario manager
-- `x` reset
-- `?` shortcuts help
+
+- `p` → Policies tab
+- `r` → Parameters tab
+- `l` → Learn tab
+- `a` → About tab
+- `s` → Scenario manager
+- `x` → Reset parameters
+- `?` → Shortcuts modal
+- `Esc` → Close overlays
+
+## Educational intent
+
+macrow is designed to support IBDP-style reasoning:
+1. Identify initial equilibrium (Y and P)
+2. Explain curve shift direction and transmission mechanism
+3. Describe new short-run equilibrium
+4. Evaluate with assumptions, time lags, and trade-offs
