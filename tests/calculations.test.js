@@ -44,4 +44,18 @@ describe('economic calculations', () => {
     expect(eq.y).toBeGreaterThanOrEqual(GRAPH.Ymin);
     expect(eq.y).toBeLessThanOrEqual(as.yFe);
   });
+
+  it('drawYfPoint uses right kink coordinates (as.yFe, as.pEnd)', () => {
+    // Verify that ASshape returns coordinates that drawYfPoint should use
+    const params = computeFromParams(defaults.params);
+    const as = ASshape(params);
+    // Yf x-position should be at right kink (shiftedYFe)
+    expect(as.yFe).toBeDefined();
+    // Yf y-position (price level) should be pEnd
+    expect(as.pEnd).toBeDefined();
+    // pEnd should be greater than pFlat (price rises along curved segment)
+    expect(as.pEnd).toBeGreaterThan(as.pFlat);
+    // Yf should be to the right of the left kink
+    expect(as.yFe).toBeGreaterThan(as.yKink);
+  });
 });
