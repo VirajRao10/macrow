@@ -234,7 +234,7 @@ function renderAboutPanel(){
 
     <div class="learnCard aboutActions">
       <label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label>
-      <label class="toggle"><input id="toggleAssess" type="checkbox"/><span>Enable Assess tab</span></label>
+      <label class="toggle"><input id="toggleAssess" type="checkbox"/><span>Enable Assess tab (dev testing only)</span></label>
       <button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button>
     </div>
   `;
