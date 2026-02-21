@@ -271,12 +271,14 @@ function replayHistory(dir){if(!state.history.length)return; state.historyIndex=
 function renderMainChart(){const svg=qs('#chartSvg'); svg.innerHTML=''; const W=860,H=560,pad={l:86,r:28,t:20,b:78},x=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r),y=P=>pad.t+(1-(P-GRAPH.Pmin)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
 rect(svg,0,0,W,H,18,'rgba(255,255,255,0.02)'); [30,50,70,90,110].forEach(P=>{line(svg,pad.l,y(P),W-pad.r,y(P),'rgba(148,163,184,0.10)',1); if(settings.showAxisNumbers) text(svg,pad.l-10,y(P)+4,String(P),'end','rgba(148,163,184,0.70)',12);}); [60,90,120,150,180].forEach(Y=>{line(svg,x(Y),pad.t,x(Y),H-pad.b,'rgba(148,163,184,0.08)',1); if(settings.showAxisNumbers) text(svg,x(Y),H-pad.b+22,String(Y),'middle','rgba(148,163,184,0.70)',12);}); line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.70)',3); line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.70)',3); text(svg,(pad.l+(W-pad.r))/2,H-18,'Real GDP ($)','middle','rgba(226,232,240,0.92)',15,true); textRot(svg,22,(pad.t+(H-pad.b))/2,'Average Price Level ($)',-90,'middle','rgba(226,232,240,0.92)',15,true);
 const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe}, base=computeFromParams(defaults.params);
+const baseEq=equilibrium(base),curEq=equilibrium(cur);
+const hasShift=Math.abs(curEq.y-baseEq.y)>0.15||Math.abs(curEq.p-baseEq.p)>0.15;
 drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true,{showLabels:false});
 drawCurveSet(svg,x,y,cur,null,false,{showLabels:true});
 if(state.compare.on && state.compare.snapshot){
   drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,{dash:'6 7',showLabels:false});
 }
-drawEquilibriumGuides(svg,x,y,equilibrium(base),equilibrium(cur),pad,H);
+drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H,{showSecond:hasShift});
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
 function drawCurveSet(svg,x,y,v,tint,muted=false,opt={}){
@@ -318,7 +320,8 @@ const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; 
 
 function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
-function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
+function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H,opt={}){
+  const {showSecond=true}=opt;
   const xAxisY=H-pad.b;
   const yAxisX=pad.l;
   const eqGap=Math.hypot(x(baseEq.y)-x(curEq.y),y(baseEq.p)-y(curEq.p));
@@ -366,7 +369,7 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   };
 
   const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
-  if(eqGap<5){
+  if(!showSecond||eqGap<5){
     drawPoint(curEq,'1',curColor,{eqTag:'E1',eqOffset:[22,-18]});
     placePLabel(y(curEq.p),'P1',curColor,0);
     placeYLabel(x(curEq.y),'Y1',curColor,0);
@@ -396,7 +399,7 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
     text(svg,yAxisX+22,(p1Y+p2Y)/2+4,'P1 → P2','start','rgba(244,114,182,0.95)',12,true);
   }
   if(Math.abs(curEq.y-baseEq.y)>0.5){
-    const deltaY=xAxisY-56;
+    const deltaY=clamp(Math.min(p1Y,p2Y)-34,pad.t+26,xAxisY-86);
     line(svg,y1X,deltaY,y2X,deltaY,'rgba(56,189,248,0.95)',2.1);
     text(svg,(y1X+y2X)/2,deltaY-8,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
   }
@@ -571,7 +574,7 @@ function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),axisY=y(G
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v4'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
+function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v6'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
 
 function initResilience(){
   window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
