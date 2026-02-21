@@ -319,46 +319,86 @@ const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; 
 function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
+  const xAxisY=H-pad.b;
+  const yAxisX=pad.l;
   const eqGap=Math.hypot(x(baseEq.y)-x(curEq.y),y(baseEq.p)-y(curEq.p));
+  const bounds={left:84,right:832,top:22,bottom:482};
   const axisLabel=(cx,cy,label,stroke)=>{
     const w=Math.max(36,label.length*7.2+14),h=20;
     const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
     [['x',cx-w/2],['y',cy-h/2],['width',w],['height',h],['rx',9],['fill','rgba(11,18,32,0.85)'],['stroke',stroke],['stroke-width','1.5']].forEach(([k,v])=>bg.setAttribute(k,v));
     svg.appendChild(bg);
     text(svg,cx,cy+4,label,'middle','rgba(241,245,249,0.96)',12,true);
+    return {x:cx,y:cy,w,h};
+  };
+  const safeAxisLabel=(cx,cy,label,stroke,padPx=14)=>{
+    const pos=clampLabelPos({x:cx,y:cy},bounds,padPx);
+    return axisLabel(pos.x,pos.y,label,stroke);
   };
   const eqLabel=(pt,label,color,dx,dy)=>{
-    const pos=clampLabelPos({x:x(pt.y)+dx,y:y(pt.p)+dy},{left:84,right:832,top:22,bottom:482},18);
+    const pos=clampLabelPos({x:x(pt.y)+dx,y:y(pt.p)+dy},bounds,18);
     boxedLabel(svg,pos.x,pos.y,label,color,{fill:'rgba(6,11,22,0.9)'});
   };
+  const drawAxisTicks=(pt,color)=>{
+    line(svg,yAxisX-7,y(pt.p),yAxisX+7,y(pt.p),color,2);
+    line(svg,x(pt.y),xAxisY-7,x(pt.y),xAxisY+7,color,2);
+  };
+  const placePLabel=(axisY,label,color,tier=0)=>{
+    const lx=yAxisX+30+tier*46;
+    const box=safeAxisLabel(lx,axisY,label,color,16);
+    line(svg,yAxisX+8,axisY,box.x-box.w/2-5,axisY,color,1.4,'4 4');
+    return box;
+  };
+  const placeYLabel=(axisX,label,color,tier=0)=>{
+    const ly=xAxisY-18-tier*28;
+    const box=safeAxisLabel(axisX,ly,label,color,16);
+    line(svg,axisX,xAxisY-8,axisX,box.y+box.h/2+4,color,1.4,'4 4');
+    return box;
+  };
   const drawPoint=(pt,tag,color,opt={})=>{
-    const pTag=opt.pTag||`P${tag}`;
-    const yTag=opt.yTag||`Y${tag}`;
     const eqTag=opt.eqTag||`E${tag}`;
     const eqOffset=opt.eqOffset||[18,-20];
     line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
     line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
     point(svg,x(pt.y),y(pt.p),5,color);
+    drawAxisTicks(pt,color);
     eqLabel(pt,eqTag,color,eqOffset[0],eqOffset[1]);
-    axisLabel(pad.l-30,y(pt.p),pTag,color);
-    axisLabel(x(pt.y),H-pad.b+36,yTag,color);
   };
 
   const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
   if(eqGap<5){
     drawPoint(curEq,'1',curColor,{eqTag:'E1',eqOffset:[22,-18]});
+    placePLabel(y(curEq.p),'P1',curColor,0);
+    placeYLabel(x(curEq.y),'Y1',curColor,0);
     return;
   }
   drawPoint(baseEq,'1',baseColor);
   drawPoint(curEq,'2',curColor,{eqOffset:[24,18]});
 
+  const p1Y=y(baseEq.p),p2Y=y(curEq.p),pClose=Math.abs(p1Y-p2Y)<26;
+  placePLabel(p1Y,'P1',baseColor,0);
+  placePLabel(p2Y,'P2',curColor,pClose?1:0);
+
+  const y1X=x(baseEq.y),y2X=x(curEq.y),yClose=Math.abs(y1X-y2X)<44;
+  if(!yClose){
+    placeYLabel(y1X,'Y1',baseColor,0);
+    placeYLabel(y2X,'Y2',curColor,0);
+  }else{
+    const leftIsBase=y1X<=y2X;
+    const left=leftIsBase?{x:y1X,label:'Y1',color:baseColor}:{x:y2X,label:'Y2',color:curColor};
+    const right=leftIsBase?{x:y2X,label:'Y2',color:curColor}:{x:y1X,label:'Y1',color:baseColor};
+    placeYLabel(left.x,left.label,left.color,0);
+    placeYLabel(right.x,right.label,right.color,1);
+  }
+
   if(Math.abs(curEq.p-baseEq.p)>0.5){
-    line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
-    text(svg,pad.l-60,(y(baseEq.p)+y(curEq.p))/2+4,'P1 → P2','end','rgba(244,114,182,0.95)',12,true);
+    line(svg,yAxisX+12,p1Y,yAxisX+12,p2Y,'rgba(244,114,182,0.95)',2.1);
+    text(svg,yAxisX+22,(p1Y+p2Y)/2+4,'P1 → P2','start','rgba(244,114,182,0.95)',12,true);
   }
   if(Math.abs(curEq.y-baseEq.y)>0.5){
-    line(svg,x(baseEq.y),H-pad.b+50,x(curEq.y),H-pad.b+50,'rgba(56,189,248,0.95)',2.1);
-    text(svg,(x(baseEq.y)+x(curEq.y))/2,H-pad.b+69,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
+    const deltaY=xAxisY-56;
+    line(svg,y1X,deltaY,y2X,deltaY,'rgba(56,189,248,0.95)',2.1);
+    text(svg,(y1X+y2X)/2,deltaY-8,'Y1 → Y2','middle','rgba(56,189,248,0.95)',12,true);
   }
 }
 
