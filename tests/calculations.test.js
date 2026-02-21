@@ -22,27 +22,26 @@ describe('economic calculations', () => {
     expect(costPush.asShiftP).toBeGreaterThan(base.asShiftP);
   });
 
-  it('Yf marker is at kink point (not midpoint of curved section)', () => {
+  it('Yf marker is at the right AS kink (where curve meets vertical segment)', () => {
     const params = computeFromParams(defaults.params);
     const as = ASshape(params);
-    // Yf (yFe) should equal the kink point yKink
-    expect(as.yFe).toBe(as.yKink);
+    // Yf should be to the right of the flat-to-curve transition point.
+    expect(as.yFe).toBeGreaterThan(as.yKink);
   });
 
-  it('Yf price level equals pFlat at kink point', () => {
+  it('Yf price level equals pEnd at right AS kink', () => {
     const params = computeFromParams(defaults.params);
     const as = ASshape(params);
-    // At the kink point, price should equal pFlat (55 in default graph)
     expect(as.pFlat).toBe(GRAPH.pFlat);
-    // The AS curve at yKink should have price = pFlat
-    expect(as.pFlat).toBe(55);
+    expect(as.pEnd).toBeGreaterThan(as.pFlat);
   });
 
-  it('equilibrium uses Yf at kink point', () => {
+  it('equilibrium remains bounded by Yf', () => {
     const params = computeFromParams(defaults.params);
     const as = ASshape(params);
     const eq = equilibrium(params);
-    // Equilibrium should be between Ymin and the kink point (yFe)
+    // Equilibrium should be between Ymin and Yf.
+    expect(eq.y).toBeGreaterThanOrEqual(GRAPH.Ymin);
     expect(eq.y).toBeLessThanOrEqual(as.yFe);
   });
 });

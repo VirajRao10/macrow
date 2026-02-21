@@ -1,5 +1,5 @@
 import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment } from './js/calculations.js';
-import { loadProgress, saveProgress, loadTeacher, saveTeacher } from './js/storage.js';
+import { loadProgress, saveProgress, clearProgress } from './js/storage.js';
 import { buildQuizQuestions, buildPracticeFromConcepts } from './js/assessments.js';
 
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));
@@ -9,29 +9,21 @@ const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab"},{key:"t",desc:"Teacher tab"},{key:"a",desc:"About tab"},
+  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
+const ALL_TABS=["policies","parameters","learn","assess","about"];
 const LEARN_TIPS=[
   "AD shifts right usually raise real output and the price level in the short run.",
   "AS shifts left (cost-push shock) create inflation with weaker growth.",
-  "The Yf marker now sits on the Real GDP axis at potential output.",
+  "The Yf marker sits on the AS curve at potential output (Yf).",
   "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
   "For top-band answers, add assumptions (confidence, spare capacity, policy lag, external shocks)."
 ];
 const LEARN_MODULES=[
   {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
   {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
-  {title:"Classroom investigation template",points:["Set a starting state and ask students to predict P/Y before moving any slider.","Apply one policy, then require annotation of what shifted and why.","Compare short-run gains against inflation or unemployment trade-offs.","Finish with a 2–3 sentence evaluation using assumptions and limits."]},
   {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
-];
-const CLASSROOM_INVESTIGATIONS=[
-  "A central bank is worried about persistent inflation and weak credibility.",
-  "Consumer confidence has fallen after external uncertainty, reducing private spending.",
-  "Government announces an infrastructure package to support growth and jobs.",
-  "Energy and shipping costs surge, pushing up firms’ production costs.",
-  "A productivity boom follows digital adoption and labour upskilling.",
-  "A tax increase is introduced to reduce a widening budget deficit."
 ];
 
 const GLOSSARY=[
@@ -56,15 +48,39 @@ const GLOSSARY=[
   {term:"Stagflation",blurb:"Combination of weak growth/unemployment with high inflation, often from adverse supply shocks."},
   {term:"Policy time lags",blurb:"Recognition, decision, and impact delays that reduce precision of stabilization policy."}
 ];
+const ASSESS_COMPETENCIES=['AD-AS Foundations','Policy Analysis','Evaluation','Diagram Reasoning','Evaluation Writing'];
 
-const settings={showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",accessibility:(localStorage.getItem("macrow_access")??"0")==="1"};
+const settings={
+  showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",
+  accessibility:(localStorage.getItem("macrow_access")??"0")==="1",
+  assessEnabled:(localStorage.getItem("macrow_assess_enabled")??"0")==="1"
+};
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
-let teacherState=loadTeacher();
-
+const getActiveTabs=()=>settings.assessEnabled?ALL_TABS:["policies","parameters","learn","about"];
 const navButtons=qsa('.navBtn');
-function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","assess","teacher","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
+function syncAssessAvailability(){
+  const assessBtn=qs('.navBtn[data-tab="assess"]');
+  if(assessBtn) assessBtn.classList.toggle('hidden',!settings.assessEnabled);
+  if(!settings.assessEnabled){
+    const assessPanel=qs('#panelAssess');
+    if(assessPanel) assessPanel.classList.add('hidden');
+  }
+}
+function setTab(tab){
+  const activeTabs=getActiveTabs();
+  const target=activeTabs.includes(tab)?tab:activeTabs[0];
+  state.tab=target;
+  navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===target));
+  ["policies","parameters","learn","assess","about"].forEach(t=>{
+    const panel=qs(`#panel${t[0].toUpperCase()+t.slice(1)}`);
+    if(panel) panel.classList.toggle('hidden',t!==target);
+  });
+  if(target==="assess") renderAssessPanel();
+  qs('#panelTitle').textContent=target[0].toUpperCase()+target.slice(1);
+  qs('#underGraphFormula')?.classList.toggle('hidden',target!=="parameters");
+}
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
 
 const policyCards=[
@@ -98,74 +114,34 @@ function renderLearnPanel(){
     <div class="sectionHint">Structured for Paper 1/2 AD–AS explanations and strong evaluation chains.</div>
     ${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}
 
-    <div class="sectionTitle">Classroom investigations</div>
-    <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
-        <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
-        <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
-      </div>
-      <textarea id="learnInvestigationText" class="textInput learnTextarea" rows="7" aria-label="Classroom investigation brief"></textarea>
-      <div class="policy__text">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
-    </div>
-
-    <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
-
     <div class="sectionTitle">Core revision modules</div>
     ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
     <div class="sectionTitle">IB Macro glossary</div>
     <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
     ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
-
-  const txt=qs('#learnInvestigationText');
-  txt.value=buildInvestigationBrief();
-  qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
-  qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
-  qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
-  updateLearnSnapshot();
-}
-
-function buildInvestigationBrief(){
-  const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe};
-  const eq=equilibrium(cur);
-  const caseLine=CLASSROOM_INVESTIGATIONS[Math.floor(Math.random()*CLASSROOM_INVESTIGATIONS.length)];
-  const policy=policyCards[Math.floor(Math.random()*policyCards.length)];
-  return [
-    'Investigation brief (IB Macro — AD/AS)',
-    `Scenario: ${caseLine}`,
-    `Assigned policy lens: ${policy.name}.`,
-    '',
-    'Student tasks:',
-    '1) Predict whether AD or AS shifts and justify with one transmission channel.',
-    '2) Draw/annotate the initial and new equilibrium (P and Y).',
-    '3) Write a 4-sentence evaluation: short run, long run, a trade-off, and a policy limit.',
-    '',
-    `Current model anchor: Y=${eq.y.toFixed(1)}, P=${eq.p.toFixed(1)}.`
-  ].join('\\n');
-}
-
-function updateLearnSnapshot(){
-  const host=qs('#learnSnapshot');
-  if(!host) return;
-  const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe};
-  const eq=equilibrium(cur);
-  const outputGap=eq.y-cur.yFe;
-  host.innerHTML=`
-    <div class="policy__name">Live classroom snapshot</div>
-    <div class="policy__text">Y = <b>${eq.y.toFixed(1)}</b>, P = <b>${eq.p.toFixed(1)}</b>, Yf = <b>${cur.yFe.toFixed(1)}</b>, output gap = <b>${outputGap>0?'+':''}${outputGap.toFixed(1)}</b>.</div>
-    <div class="policy__text">Sentence starter: <i>Identify which curve shifts first (AD via demand factors or AS via cost/productivity factors), then explain how Y and P move at the new equilibrium.</i></div>`;
 }
 
 function renderAssessPanel(){
   const root=qs('#panelAssess');
+  if(!root) return;
   const questions=buildQuizQuestions(GLOSSARY);
   const practice=buildPracticeFromConcepts(GLOSSARY);
   const attempts=progress.quizAttempts||[];
   const avg=attempts.length?(attempts.reduce((a,b)=>a+b.score,0)/attempts.length).toFixed(1):'—';
+  const best=attempts.length?Math.max(...attempts.map(a=>Number(a.score)||0)).toFixed(1):'—';
+  const recent=attempts.slice(-3).reverse();
   root.innerHTML=`
     <div class="sectionTitle">Formative quiz + progress dashboard</div>
-    <div class="learnCard"><b>Attempts:</b> ${attempts.length} &nbsp; <b>Average score:</b> ${avg}%</div>
+    <div class="learnCard"><b>Attempts:</b> ${attempts.length} &nbsp; <b>Average score:</b> ${avg}% &nbsp; <b>Best:</b> ${best}%</div>
+    <div class="learnCard">
+      <div id="quizLiveScore" class="policy__text"><b>Current quiz:</b> Answered 0/${questions.length} · Correct 0</div>
+      <div class="scenarioToolbar">
+        <button id="btnSubmitQuiz" class="btn btn--primary">Save current attempt</button>
+        <button id="btnNewQuiz" class="btn btn--ghost">New question set</button>
+        <button id="btnResetProgress" class="btn btn--ghost">Reset assess progress</button>
+      </div>
+    </div>
+    ${recent.length?`<div class="learnCard">${recent.map(a=>`<div class="policy__text">• ${formatAttemptDate(a.ts)}: <b>${Number(a.score||0).toFixed(1)}%</b></div>`).join('')}</div>`:''}
     <div class="sectionHint">Uses existing Macrow glossary terms only. Instant feedback is shown after each response.</div>
     <div id="quizRoot"></div>
     <div class="sectionTitle">Competency-based path</div>
@@ -174,44 +150,62 @@ function renderAssessPanel(){
     ${practice.map(p=>`<div class="learnCard"><b>${p.competency}</b><div class="policy__text">${escapeHtml(p.prompt)}</div></div>`).join('')}
   `;
   const quizHost=qs('#quizRoot');
-  quizHost.innerHTML=questions.map((q,i)=>`<div class="learnCard"><div><b>Q${i+1}.</b> ${escapeHtml(q.prompt)}</div><div class="scenarioToolbar">${q.options.map(o=>`<button class="btn btn--ghost" data-q="${q.id}" data-a="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('')}</div><div id="fb_${q.id}" class="policy__text"></div></div>`).join('');
-  quizHost.onclick=e=>{
-    const b=e.target.closest('[data-q]'); if(!b) return;
-    const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
-    const ok=b.dataset.a===q.answer;
-    qs(`#fb_${q.id}`).textContent=ok?`✅ Correct. Competency: ${q.competency}`:`❌ Not quite. Correct answer: ${q.answer}`;
-    progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+(ok?1:0);
-    saveProgress(progress);
+  quizHost.innerHTML=questions.map((q,i)=>`<div class="learnCard"><div><b>Q${i+1}.</b> ${escapeHtml(q.prompt)}</div><div class="scenarioToolbar">${q.options.map((o,optIdx)=>`<button class="btn btn--ghost" data-q="${q.id}" data-opt="${optIdx}">${escapeHtml(o)}</button>`).join('')}</div><div id="fb_${q.id}" class="policy__text"></div></div>`).join('');
+  const answered=new Set();
+  let correctCount=0;
+  const quizScoreNode=qs('#quizLiveScore');
+  const updateQuizScore=()=>{
+    if(quizScoreNode){
+      quizScoreNode.innerHTML=`<b>Current quiz:</b> Answered ${answered.size}/${questions.length} · Correct ${correctCount}`;
+    }
   };
-  qs('#competencyRoot').innerHTML=['AD-AS Foundations','Policy Analysis','Evaluation','Diagram Reasoning','Evaluation Writing'].map(k=>`<div class="policy__text"><b>${k}</b>: ${progress.competencies?.[k]||0} mastery points</div>`).join('');
-  qs('#competencyRoot').insertAdjacentHTML('beforeend','<button id="btnSubmitQuiz" class="btn btn--primary">Record quiz attempt (auto score from feedback)</button>');
+  const renderCompetencies=()=>{
+    qs('#competencyRoot').innerHTML=ASSESS_COMPETENCIES.map(k=>`<div class="policy__text"><b>${k}</b>: ${progress.competencies?.[k]||0} mastery points</div>`).join('');
+  };
+  quizHost.onclick=e=>{
+    const b=e.target.closest('[data-q][data-opt]'); if(!b) return;
+    const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
+    if(answered.has(q.id)) return;
+    const optionIdx=Number(b.dataset.opt);
+    const selected=q.options[optionIdx];
+    if(typeof selected!=='string') return;
+    const ok=selected===q.answer;
+    answered.add(q.id);
+    if(ok) correctCount+=1;
+    qs(`#fb_${q.id}`).textContent=ok?`✅ Correct. Competency: ${q.competency}`:`❌ Not quite. Correct answer: ${q.answer}`;
+    quizHost.querySelectorAll(`[data-q="${q.id}"]`).forEach(btn=>{btn.disabled=true;});
+    if(ok){
+      progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+1;
+      saveProgress(progress);
+      renderCompetencies();
+    }
+    updateQuizScore();
+  };
+  renderCompetencies();
   qs('#btnSubmitQuiz').onclick=()=>{
-    const score=Math.min(100,Math.round((Object.values(progress.competencies||{}).reduce((a,b)=>a+b,0)%10)/10*100));
-    progress.quizAttempts=[...(progress.quizAttempts||[]),{ts:Date.now(),score}].slice(-30);
+    if(!answered.size){
+      showStatus('Answer at least one question before saving an attempt.',true);
+      return;
+    }
+    const score=(correctCount/questions.length)*100;
+    progress.quizAttempts=[...(progress.quizAttempts||[]),{ts:Date.now(),score:Number(score.toFixed(1)),correct:correctCount,total:questions.length,answered:answered.size}].slice(-30);
     saveProgress(progress);
+    showStatus('Quiz attempt saved.');
+    renderAssessPanel();
+  };
+  qs('#btnNewQuiz').onclick=()=>renderAssessPanel();
+  qs('#btnResetProgress').onclick=()=>{
+    if(!window.confirm('Reset all saved assess attempts and competency points?')) return;
+    clearProgress();
+    progress=loadProgress();
+    showStatus('Assess progress reset.');
     renderAssessPanel();
   };
 }
 
-function renderTeacherPanel(){
-  const root=qs('#panelTeacher');
-  const classes=teacherState.classes||[];
-  const assignments=teacherState.assignments||[];
-  root.innerHTML=`
-    <div class="sectionTitle">Teacher tools (local classroom mode)</div>
-    <div class="sectionHint">Create classes, track local student progress, and build assignments from existing AD-AS scenarios.</div>
-    <div class="learnCard"><input id="className" class="textInput" placeholder="Class name (e.g. IB Econ HL 12A)"/><button id="btnAddClass" class="btn btn--primary">Add class</button></div>
-    <div id="classList">${classes.map(c=>`<div class="learnCard"><b>${escapeHtml(c.name)}</b> — students: ${c.students||0}</div>`).join('')||'<div class="sectionHint">No classes yet.</div>'}</div>
-    <div class="learnCard"><input id="assignName" class="textInput" placeholder="Assignment title"/><button id="btnCreateAssignment" class="btn btn--ghost">Create assignment from current scenario</button></div>
-    <div id="assignmentList">${assignments.map(a=>`<div class="learnCard"><b>${escapeHtml(a.name)}</b><div class="policy__text">Scenario category: ${escapeHtml(a.category||'custom')}</div></div>`).join('')}</div>
-    <div class="learnCard" id="teacherAnalytics"></div>
-  `;
-  qs('#btnAddClass').onclick=()=>{const name=qs('#className').value.trim(); if(!name)return; teacherState.classes=[{id:crypto.randomUUID(),name,students:0},...classes]; saveTeacher(teacherState); renderTeacherPanel();};
-  qs('#btnCreateAssignment').onclick=()=>{const name=qs('#assignName').value.trim()||`Assignment ${assignments.length+1}`; teacherState.assignments=[{id:crypto.randomUUID(),name,params:deepCopy(state.params),category:'AD-AS'} ,...assignments]; saveTeacher(teacherState); renderTeacherPanel();};
-  const totalAssignments=assignments.length;
-  const totalClasses=classes.length;
-  const avgQuiz=(progress.quizAttempts||[]).length?Math.round((progress.quizAttempts||[]).reduce((a,b)=>a+b.score,0)/(progress.quizAttempts||[]).length):0;
-  qs('#teacherAnalytics').innerHTML=`<div class="policy__name">Class analytics</div><div class="policy__text">Classes: <b>${totalClasses}</b>, Assignments: <b>${totalAssignments}</b>, Student quiz average (local): <b>${avgQuiz}%</b>.</div>`;
+function formatAttemptDate(ts){
+  if(!ts) return 'Unknown time';
+  return new Date(ts).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
 function renderAboutPanel(){
@@ -234,11 +228,23 @@ function renderAboutPanel(){
 
     <div class="learnCard aboutActions">
       <label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label>
+      <label class="toggle"><input id="toggleAssess" type="checkbox"/><span>Enable Assess tab</span></label>
       <button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button>
     </div>
   `;
   qs('#toggleAccess').checked=settings.accessibility;
   qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
+  qs('#toggleAssess').checked=settings.assessEnabled;
+  qs('#toggleAssess').onchange=e=>{
+    settings.assessEnabled=e.target.checked;
+    localStorage.setItem('macrow_assess_enabled',settings.assessEnabled?'1':'0');
+    syncAssessAvailability();
+    if(settings.assessEnabled){
+      renderAssessPanel();
+    }else if(state.tab==='assess'){
+      setTab('about');
+    }
+  };
   qs('#btnOpenShortcuts').onclick=openShortcuts;
 }
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
@@ -257,7 +263,7 @@ function queueRender(){
   pendingRender=true;
   requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
 }
-function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); updateLearnSnapshot(); queueRender(); if(pushHistory) pushPolicyHistory();}
+function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); queueRender(); if(pushHistory) pushPolicyHistory();}
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
@@ -303,7 +309,7 @@ function renderState(base,cur){
 }
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
-function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur),yfMarkerP=GRAPH.Pmin+Math.max(8,(as.pFlat-GRAPH.Pmin)*0.35); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output marker on the Real GDP axis.',x:as.yKink,y:yfMarkerP},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output marker on the AS curve.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
@@ -492,7 +498,30 @@ function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q')setTab('assess'); if(e.key==='t')setTab('teacher'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+function isEditableTarget(target){
+  if(!target) return false;
+  const el=target.closest?.('input, textarea, select, [contenteditable="true"]');
+  return Boolean(el);
+}
+
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click();
+    if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click();
+    if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();
+  }
+
+  if(isEditableTarget(e.target)) return;
+
+  if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();}
+  if(e.key==='p')setTab('policies');
+  if(e.key==='r')setTab('parameters');
+  if(e.key==='l')setTab('learn');
+  if(e.key==='q' && settings.assessEnabled)setTab('assess');
+  if(e.key==='a')setTab('about');
+  if(e.key==='s')qs('#btnScenarios').click();
+  if(e.key==='x')qs('#btnReset').click();
+});
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
@@ -508,11 +537,12 @@ function pathFromPoints(x,y,pts){return `M ${pts.map(([Y,P])=>`${x(Y).toFixed(1)
 function boxedLabel(svg,x,y,label,color,opt={}){const w=Math.max(40,label.length*7.1)+20,h=28,bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); const fill=opt.fill||'rgba(6,11,22,0.88)'; [['x',x-w/2],['y',y-h/2],['width',w],['height',h],['rx',13],['fill',fill],['stroke',color||'rgba(148,163,184,.9)'],['stroke-width','1.7']].forEach(([k,v])=>bg.setAttribute(k,v)); svg.appendChild(bg); text(svg,x,y+4,label,'middle','rgba(241,245,249,0.98)',12.5,true); return {x,y,w,h};}
 function clampLabelPos(pos,box,pad=18){return {x:clamp(pos.x,box.left+pad,box.right-pad),y:clamp(pos.y,box.top+pad,box.bottom-pad)};}
 function labelsOverlap(a,b){if(!a||!b) return false; return Math.abs(a.x-b.x)<((a.w+b.w)/2+10)&&Math.abs(a.y-b.y)<((a.h+b.h)/2+8);}
-function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yKink),axisY=y(GRAPH.Pmin),stroke=c||'rgba(34,197,94,.9)',markerP=GRAPH.Pmin+Math.max(8,(as.pFlat-GRAPH.Pmin)*0.35),markerY=y(markerP); if(dash){line(svg,px,axisY,px,markerY,stroke,1.4,dash);} line(svg,px,axisY,px,markerY,stroke,muted?2.1:2.6); point(svg,px,markerY,muted?3.8:4.6,stroke); text(svg,px,axisY+22,'Yf','middle',stroke,12.5,true); return {x:px,y:axisY+22,w:34,h:20};}
+function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),py=y(as.pEnd),axisY=y(GRAPH.Pmin),stroke=c||'rgba(34,197,94,.9)',labelY=axisY+20,guideDash=dash||'4 6'; if(!muted){line(svg,px,py,px,axisY,stroke,1.6,guideDash);} point(svg,px,py,muted?3.8:4.8,stroke); text(svg,px,labelY,'Yf','middle',stroke,12.5,true); return {x:px,y:labelY,w:34,h:20};}
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
 function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
+
 
 function initResilience(){
   window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
@@ -537,16 +567,19 @@ function init(){
   initResilience();
   initPerformanceMonitoring();
   document.body.classList.toggle('accessibility-mode',settings.accessibility);
+  syncAssessAvailability();
   renderPoliciesPanel();
   renderParametersPanel();
   renderLearnPanel();
-  renderAssessPanel();
-  renderTeacherPanel();
+  if(settings.assessEnabled) renderAssessPanel();
   renderAboutPanel();
   initScenarioManager();
   setTab('policies');
   showWelcomeIfNeeded();
   applyScenarioFromUrl();
-  onParamsChanged(true);
+  Object.assign(state,computeFromParams(state.params));
+  syncParamReadouts();
+  queueRender();
+  pushPolicyHistory();
 }
 init();

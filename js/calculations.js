@@ -23,10 +23,8 @@ export function ASshape({asShiftP,yFe}){
     const t=i/60,y=lerp(yKink,shiftedYFe,t),e=(Math.exp(6*t)-1)/(Math.exp(6)-1),p=pFlat+e*(pEnd-pFlat);
     pts.push([y,p]);
   }
-  const yFeGreenPoint=yKink;
-  const pFeGreenPoint=pFlat+((Math.exp(6*clamp((yFeGreenPoint-yKink)/(shiftedYFe-yKink),0,1))-1)/(Math.exp(6)-1))*(pEnd-pFlat);
   pts.push([shiftedYFe,pEnd],[shiftedYFe,GRAPH.Pmax-6]);
-  return {pts,yKink,yFe:yFeGreenPoint,pFlat,pEnd};
+  return {pts,yKink,yFe:shiftedYFe,pFlat,pEnd};
 }
 
 export function equilibrium(v){
