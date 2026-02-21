@@ -319,11 +319,9 @@ const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; 
 function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
-  const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
-  const yGap=Math.abs(x(baseEq.y)-x(curEq.y));
   const eqGap=Math.hypot(x(baseEq.y)-x(curEq.y),y(baseEq.p)-y(curEq.p));
   const axisLabel=(cx,cy,label,stroke)=>{
-    const w=34,h=20;
+    const w=Math.max(36,label.length*7.2+14),h=20;
     const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
     [['x',cx-w/2],['y',cy-h/2],['width',w],['height',h],['rx',9],['fill','rgba(11,18,32,0.85)'],['stroke',stroke],['stroke-width','1.5']].forEach(([k,v])=>bg.setAttribute(k,v));
     svg.appendChild(bg);
@@ -342,19 +340,13 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
     line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
     point(svg,x(pt.y),y(pt.p),5,color);
     eqLabel(pt,eqTag,color,eqOffset[0],eqOffset[1]);
-
-    const pBaseOffset=tag==='1'?-12:12;
-    const pOffset=opt.pOffset ?? (pGap<24?pBaseOffset:(tag==='1'?-2:2));
-    axisLabel(pad.l-30,y(pt.p)+pOffset,pTag,color);
-
-    const yBaseOffset=tag==='1'?-22:22;
-    const yOffset=opt.yOffset ?? (yGap<34?yBaseOffset:0);
-    axisLabel(x(pt.y)+yOffset,H-pad.b+36,yTag,color);
+    axisLabel(pad.l-30,y(pt.p),pTag,color);
+    axisLabel(x(pt.y),H-pad.b+36,yTag,color);
   };
 
   const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
-  if(eqGap<10){
-    drawPoint(curEq,'',curColor,{pTag:'P',yTag:'Y',eqTag:'E',pOffset:-2,yOffset:0,eqOffset:[22,-18]});
+  if(eqGap<5){
+    drawPoint(curEq,'1',curColor,{eqTag:'E1',eqOffset:[22,-18]});
     return;
   }
   drawPoint(baseEq,'1',baseColor);
