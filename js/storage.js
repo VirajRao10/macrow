@@ -1,20 +1,28 @@
 const KEY='macrow_progress_v1';
-const TEACHER_KEY='macrow_teacher_v1';
+const DEFAULT_PROGRESS={quizAttempts:[],competencies:{},practice:[]};
 
 export function loadProgress(){
-  try{return JSON.parse(localStorage.getItem(KEY)||'{"quizAttempts":[],"competencies":{},"practice":[]}');}
-  catch{return {quizAttempts:[],competencies:{},practice:[]};}
+  try{
+    const parsed=JSON.parse(localStorage.getItem(KEY)||'{}');
+    return {
+      quizAttempts:Array.isArray(parsed.quizAttempts)?parsed.quizAttempts:[],
+      competencies:parsed.competencies&&typeof parsed.competencies==='object'?parsed.competencies:{},
+      practice:Array.isArray(parsed.practice)?parsed.practice:[]
+    };
+  }catch{
+    return {...DEFAULT_PROGRESS};
+  }
 }
 
 export function saveProgress(progress){
-  localStorage.setItem(KEY,JSON.stringify(progress));
+  const safe={
+    quizAttempts:Array.isArray(progress?.quizAttempts)?progress.quizAttempts:[],
+    competencies:progress?.competencies&&typeof progress.competencies==='object'?progress.competencies:{},
+    practice:Array.isArray(progress?.practice)?progress.practice:[]
+  };
+  localStorage.setItem(KEY,JSON.stringify(safe));
 }
 
-export function loadTeacher(){
-  try{return JSON.parse(localStorage.getItem(TEACHER_KEY)||'{"classes":[],"assignments":[],"studentProgress":[]}');}
-  catch{return {classes:[],assignments:[],studentProgress:[]};}
-}
-
-export function saveTeacher(state){
-  localStorage.setItem(TEACHER_KEY,JSON.stringify(state));
+export function clearProgress(){
+  localStorage.removeItem(KEY);
 }

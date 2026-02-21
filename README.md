@@ -2,7 +2,7 @@
 
 Interactive **IBDP Economics** learning tool for Keynesian **AD–AS** analysis.
 
-macrow helps students and teachers:
+macrow helps students:
 - visualize AD, SRAS, and potential output (Yf)
 - test fiscal, monetary, and supply-side policies
 - compare baseline vs policy outcomes
@@ -13,9 +13,8 @@ macrow helps students and teachers:
 
 - Policy cards with replay history and compare mode
 - Parameter sliders for core macro drivers
-- Learn Hub with exam roadmap, glossary, and classroom investigation generator
-- Assessment tab: formative quizzes + competency progression + practice prompts (local storage)
-- Teacher tab: class list, assignment creation from current scenario, local analytics
+- Learn Hub with exam roadmap and glossary
+- Assessment tab (About-toggle controlled): formative quizzes + competency progression + practice prompts (local storage)
 - Scenario manager (save/load/delete/import/export/share)
 - Export chart as PNG
 - Keyboard shortcuts and accessibility mode
@@ -42,8 +41,7 @@ http://127.0.0.1:4173
 - `p` → Policies tab
 - `r` → Parameters tab
 - `l` → Learn tab
-- `q` → Assess tab
-- `t` → Teacher tab
+- `q` → Assess tab (when enabled from About)
 - `a` → About tab
 - `s` → Scenario manager
 - `x` → Reset parameters

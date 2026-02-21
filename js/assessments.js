@@ -1,11 +1,12 @@
 export function buildQuizQuestions(glossary){
-  return glossary.slice(0,10).map((item,idx)=>{
+  const picked=shuffle(glossary).slice(0,Math.min(10,glossary.length));
+  return picked.map((item,idx)=>{
     const correct=item.term;
-    const distractors=glossary.filter(g=>g.term!==correct).slice(idx,idx+3).map(g=>g.term);
+    const distractors=shuffle(glossary.filter(g=>g.term!==correct)).slice(0,3).map(g=>g.term);
     return {
       id:`q_${idx+1}`,
       prompt:`Which macro concept best matches: ${item.blurb}`,
-      options:shuffle([correct,...distractors]).slice(0,4),
+      options:shuffle([correct,...distractors]),
       answer:correct,
       competency:idx<4?'AD-AS Foundations':idx<7?'Policy Analysis':'Evaluation'
     };

@@ -1,4 +1,4 @@
-const CACHE = "macrow-v21";
+const CACHE = "macrow-v22";
 const ASSETS = [
   "./",
   "./index.html",
@@ -29,14 +29,17 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
+    const request = event.request;
     const cache = await caches.open(CACHE);
-    const cached = await cache.match(event.request);
-    if (cached) return cached;
+    const isSameOrigin = new URL(request.url).origin === self.location.origin;
+    const canCache = request.method === "GET" && isSameOrigin;
+    const cached = canCache ? await cache.match(request) : null;
 
     try {
-      const fresh = await fetch(event.request);
-      if (event.request.method === "GET" && fresh && fresh.ok) {
-        cache.put(event.request, fresh.clone());
+      // Network-first prevents stale UI/JS after local edits.
+      const fresh = await fetch(request);
+      if (canCache && fresh && fresh.ok) {
+        cache.put(request, fresh.clone());
       }
       return fresh;
     } catch {
