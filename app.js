@@ -1,5 +1,5 @@
 import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment } from './js/calculations.js';
-import { loadProgress, saveProgress, loadTeacher, saveTeacher } from './js/storage.js';
+import { loadProgress, saveProgress } from './js/storage.js';
 import { buildQuizQuestions, buildPracticeFromConcepts } from './js/assessments.js';
 
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));
@@ -9,13 +9,13 @@ const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab"},{key:"t",desc:"Teacher tab"},{key:"a",desc:"About tab"},
+  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
   "AD shifts right usually raise real output and the price level in the short run.",
   "AS shifts left (cost-push shock) create inflation with weaker growth.",
-  "The Yf marker now sits on the Real GDP axis at potential output.",
+  "Yf now anchors at the AS right-kink point (where SRAS meets vertical LRAS).",
   "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
   "For top-band answers, add assumptions (confidence, spare capacity, policy lag, external shocks)."
 ];
@@ -57,15 +57,36 @@ const GLOSSARY=[
   {term:"Policy time lags",blurb:"Recognition, decision, and impact delays that reduce precision of stabilization policy."}
 ];
 
-const settings={showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",accessibility:(localStorage.getItem("macrow_access")??"0")==="1"};
+const settings={
+  showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",
+  accessibility:(localStorage.getItem("macrow_access")??"0")==="1",
+  assessEnabled:(localStorage.getItem("macrow_assess_enabled")??"0")==="1"
+};
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
-let teacherState=loadTeacher();
 
 const navButtons=qsa('.navBtn');
-function setTab(tab){state.tab=tab; navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab)); ["policies","parameters","learn","assess","teacher","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab)); qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1); qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");}
+const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
+function setTab(tab){
+  if(tab==="assess" && !settings.assessEnabled){
+    tab="policies";
+  }
+  state.tab=tab;
+  navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab));
+  ["policies","parameters","learn","assess","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab));
+  qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1);
+  qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");
+}
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+
+function syncAssessAvailability(){
+  if(!assessNavButton) return;
+  assessNavButton.classList.toggle("hidden",!settings.assessEnabled);
+  if(!settings.assessEnabled && state.tab==="assess"){
+    setTab("policies");
+  }
+}
 
 const policyCards=[
 {id:'fiscal_exp',name:'Fiscal expansionary',badge:{text:'AD → right',kind:'ad'},definition:'Increase G or reduce taxes.',apply:p=>({...p,govSpending:clamp(p.govSpending+18,0,100),taxRate:clamp(p.taxRate-8,0,50)})},
@@ -193,27 +214,6 @@ function renderAssessPanel(){
   };
 }
 
-function renderTeacherPanel(){
-  const root=qs('#panelTeacher');
-  const classes=teacherState.classes||[];
-  const assignments=teacherState.assignments||[];
-  root.innerHTML=`
-    <div class="sectionTitle">Teacher tools (local classroom mode)</div>
-    <div class="sectionHint">Create classes, track local student progress, and build assignments from existing AD-AS scenarios.</div>
-    <div class="learnCard"><input id="className" class="textInput" placeholder="Class name (e.g. IB Econ HL 12A)"/><button id="btnAddClass" class="btn btn--primary">Add class</button></div>
-    <div id="classList">${classes.map(c=>`<div class="learnCard"><b>${escapeHtml(c.name)}</b> — students: ${c.students||0}</div>`).join('')||'<div class="sectionHint">No classes yet.</div>'}</div>
-    <div class="learnCard"><input id="assignName" class="textInput" placeholder="Assignment title"/><button id="btnCreateAssignment" class="btn btn--ghost">Create assignment from current scenario</button></div>
-    <div id="assignmentList">${assignments.map(a=>`<div class="learnCard"><b>${escapeHtml(a.name)}</b><div class="policy__text">Scenario category: ${escapeHtml(a.category||'custom')}</div></div>`).join('')}</div>
-    <div class="learnCard" id="teacherAnalytics"></div>
-  `;
-  qs('#btnAddClass').onclick=()=>{const name=qs('#className').value.trim(); if(!name)return; teacherState.classes=[{id:crypto.randomUUID(),name,students:0},...classes]; saveTeacher(teacherState); renderTeacherPanel();};
-  qs('#btnCreateAssignment').onclick=()=>{const name=qs('#assignName').value.trim()||`Assignment ${assignments.length+1}`; teacherState.assignments=[{id:crypto.randomUUID(),name,params:deepCopy(state.params),category:'AD-AS'} ,...assignments]; saveTeacher(teacherState); renderTeacherPanel();};
-  const totalAssignments=assignments.length;
-  const totalClasses=classes.length;
-  const avgQuiz=(progress.quizAttempts||[]).length?Math.round((progress.quizAttempts||[]).reduce((a,b)=>a+b.score,0)/(progress.quizAttempts||[]).length):0;
-  qs('#teacherAnalytics').innerHTML=`<div class="policy__name">Class analytics</div><div class="policy__text">Classes: <b>${totalClasses}</b>, Assignments: <b>${totalAssignments}</b>, Student quiz average (local): <b>${avgQuiz}%</b>.</div>`;
-}
-
 function renderAboutPanel(){
   qs('#panelAbout').innerHTML=`
     <div class="sectionTitle">About macrow</div>
@@ -234,11 +234,18 @@ function renderAboutPanel(){
 
     <div class="learnCard aboutActions">
       <label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label>
+      <label class="toggle"><input id="toggleAssess" type="checkbox"/><span>Enable Assess tab</span></label>
       <button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button>
     </div>
   `;
   qs('#toggleAccess').checked=settings.accessibility;
   qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
+  qs('#toggleAssess').checked=settings.assessEnabled;
+  qs('#toggleAssess').onchange=e=>{
+    settings.assessEnabled=e.target.checked;
+    localStorage.setItem('macrow_assess_enabled',settings.assessEnabled?'1':'0');
+    syncAssessAvailability();
+  };
   qs('#btnOpenShortcuts').onclick=openShortcuts;
 }
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
@@ -264,15 +271,21 @@ function replayHistory(dir){if(!state.history.length)return; state.historyIndex=
 function renderMainChart(){const svg=qs('#chartSvg'); svg.innerHTML=''; const W=860,H=560,pad={l:86,r:28,t:20,b:78},x=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r),y=P=>pad.t+(1-(P-GRAPH.Pmin)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
 rect(svg,0,0,W,H,18,'rgba(255,255,255,0.02)'); [30,50,70,90,110].forEach(P=>{line(svg,pad.l,y(P),W-pad.r,y(P),'rgba(148,163,184,0.10)',1); if(settings.showAxisNumbers) text(svg,pad.l-10,y(P)+4,String(P),'end','rgba(148,163,184,0.70)',12);}); [60,90,120,150,180].forEach(Y=>{line(svg,x(Y),pad.t,x(Y),H-pad.b,'rgba(148,163,184,0.08)',1); if(settings.showAxisNumbers) text(svg,x(Y),H-pad.b+22,String(Y),'middle','rgba(148,163,184,0.70)',12);}); line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.70)',3); line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.70)',3); text(svg,(pad.l+(W-pad.r))/2,H-18,'Real GDP ($)','middle','rgba(226,232,240,0.92)',15,true); textRot(svg,22,(pad.t+(H-pad.b))/2,'Average Price Level ($)',-90,'middle','rgba(226,232,240,0.92)',15,true);
 const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe}, base=computeFromParams(defaults.params);
-drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true); drawCurveSet(svg,x,y,cur,null,false); if(state.compare.on && state.compare.snapshot){drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,'6 7');}
+drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true,{showLabels:false});
+drawCurveSet(svg,x,y,cur,null,false,{showLabels:true});
+if(state.compare.on && state.compare.snapshot){
+  drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,{dash:'6 7',showLabels:false});
+}
 drawEquilibriumGuides(svg,x,y,equilibrium(base),equilibrium(cur),pad,H);
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
-function drawCurveSet(svg,x,y,v,tint,muted=false,dash){
+function drawCurveSet(svg,x,y,v,tint,muted=false,opt={}){
+  const {dash,showLabels=true}=opt;
   const ad=adLineSegment(v.adShiftY).seg;
   if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash);
   const as=ASshape(v);
   strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash);
+  if(!showLabels) return;
   const adLabel=labelOnAD(svg,x,y,v.adShiftY,tint);
   const yfLabel=drawYfPoint(svg,x,y,as,tint,muted,dash);
   labelOnAS(svg,x,y,as,tint,adLabel,yfLabel);
@@ -303,35 +316,41 @@ function renderState(base,cur){
 }
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
-function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur),yfMarkerP=GRAPH.Pmin+Math.max(8,(as.pFlat-GRAPH.Pmin)*0.35); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output marker on the Real GDP axis.',x:as.yKink,y:yfMarkerP},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
+function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
-  const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
-  const yGap=Math.abs(x(baseEq.y)-x(curEq.y));
+  const eqGap=Math.hypot(x(baseEq.y)-x(curEq.y),y(baseEq.p)-y(curEq.p));
   const axisLabel=(cx,cy,label,stroke)=>{
-    const w=34,h=20;
+    const w=Math.max(36,label.length*7.2+14),h=20;
     const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
     [['x',cx-w/2],['y',cy-h/2],['width',w],['height',h],['rx',9],['fill','rgba(11,18,32,0.85)'],['stroke',stroke],['stroke-width','1.5']].forEach(([k,v])=>bg.setAttribute(k,v));
     svg.appendChild(bg);
     text(svg,cx,cy+4,label,'middle','rgba(241,245,249,0.96)',12,true);
   };
-  const drawPoint=(pt,tag,color)=>{
+  const eqLabel=(pt,label,color,dx,dy)=>{
+    const pos=clampLabelPos({x:x(pt.y)+dx,y:y(pt.p)+dy},{left:84,right:832,top:22,bottom:482},18);
+    boxedLabel(svg,pos.x,pos.y,label,color,{fill:'rgba(6,11,22,0.9)'});
+  };
+  const drawPoint=(pt,tag,color,opt={})=>{
+    const pTag=opt.pTag||`P${tag}`;
+    const yTag=opt.yTag||`Y${tag}`;
+    const eqTag=opt.eqTag||`E${tag}`;
+    const eqOffset=opt.eqOffset||[18,-20];
     line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
     line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
     point(svg,x(pt.y),y(pt.p),5,color);
-
-    const pBaseOffset=tag==='1'?-12:12;
-    const pOffset=pGap<24?pBaseOffset:(tag==='1'?-2:2);
-    axisLabel(pad.l-30,y(pt.p)+pOffset,`P${tag}`,color);
-
-    const yBaseOffset=tag==='1'?-22:22;
-    const yOffset=yGap<34?yBaseOffset:0;
-    axisLabel(x(pt.y)+yOffset,H-pad.b+36,`Y${tag}`,color);
+    eqLabel(pt,eqTag,color,eqOffset[0],eqOffset[1]);
+    axisLabel(pad.l-30,y(pt.p),pTag,color);
+    axisLabel(x(pt.y),H-pad.b+36,yTag,color);
   };
 
   const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
+  if(eqGap<5){
+    drawPoint(curEq,'1',curColor,{eqTag:'E1',eqOffset:[22,-18]});
+    return;
+  }
   drawPoint(baseEq,'1',baseColor);
-  drawPoint(curEq,'2',curColor);
+  drawPoint(curEq,'2',curColor,{eqOffset:[24,18]});
 
   if(Math.abs(curEq.p-baseEq.p)>0.5){
     line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
@@ -492,7 +511,7 @@ function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q')setTab('assess'); if(e.key==='t')setTab('teacher'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q'&&settings.assessEnabled)setTab('assess'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
@@ -508,11 +527,11 @@ function pathFromPoints(x,y,pts){return `M ${pts.map(([Y,P])=>`${x(Y).toFixed(1)
 function boxedLabel(svg,x,y,label,color,opt={}){const w=Math.max(40,label.length*7.1)+20,h=28,bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); const fill=opt.fill||'rgba(6,11,22,0.88)'; [['x',x-w/2],['y',y-h/2],['width',w],['height',h],['rx',13],['fill',fill],['stroke',color||'rgba(148,163,184,.9)'],['stroke-width','1.7']].forEach(([k,v])=>bg.setAttribute(k,v)); svg.appendChild(bg); text(svg,x,y+4,label,'middle','rgba(241,245,249,0.98)',12.5,true); return {x,y,w,h};}
 function clampLabelPos(pos,box,pad=18){return {x:clamp(pos.x,box.left+pad,box.right-pad),y:clamp(pos.y,box.top+pad,box.bottom-pad)};}
 function labelsOverlap(a,b){if(!a||!b) return false; return Math.abs(a.x-b.x)<((a.w+b.w)/2+10)&&Math.abs(a.y-b.y)<((a.h+b.h)/2+8);}
-function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yKink),axisY=y(GRAPH.Pmin),stroke=c||'rgba(34,197,94,.9)',markerP=GRAPH.Pmin+Math.max(8,(as.pFlat-GRAPH.Pmin)*0.35),markerY=y(markerP); if(dash){line(svg,px,axisY,px,markerY,stroke,1.4,dash);} line(svg,px,axisY,px,markerY,stroke,muted?2.1:2.6); point(svg,px,markerY,muted?3.8:4.6,stroke); text(svg,px,axisY+22,'Yf','middle',stroke,12.5,true); return {x:px,y:axisY+22,w:34,h:20};}
+function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),axisY=y(GRAPH.Pmin),stroke=c||'rgba(34,197,94,.9)',markerY=y(as.pEnd); if(dash){line(svg,px,axisY,px,markerY,stroke,1.4,dash);} line(svg,px,axisY,px,markerY,stroke,muted?2.1:2.6); point(svg,px,markerY,muted?3.8:4.6,stroke); text(svg,px,axisY+22,'Yf','middle',stroke,12.5,true); return {x:px,y:axisY+22,w:34,h:20};}
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
+function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v4'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
 
 function initResilience(){
   window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
@@ -541,9 +560,9 @@ function init(){
   renderParametersPanel();
   renderLearnPanel();
   renderAssessPanel();
-  renderTeacherPanel();
   renderAboutPanel();
   initScenarioManager();
+  syncAssessAvailability();
   setTab('policies');
   showWelcomeIfNeeded();
   applyScenarioFromUrl();
