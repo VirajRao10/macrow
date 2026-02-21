@@ -271,15 +271,21 @@ function replayHistory(dir){if(!state.history.length)return; state.historyIndex=
 function renderMainChart(){const svg=qs('#chartSvg'); svg.innerHTML=''; const W=860,H=560,pad={l:86,r:28,t:20,b:78},x=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r),y=P=>pad.t+(1-(P-GRAPH.Pmin)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
 rect(svg,0,0,W,H,18,'rgba(255,255,255,0.02)'); [30,50,70,90,110].forEach(P=>{line(svg,pad.l,y(P),W-pad.r,y(P),'rgba(148,163,184,0.10)',1); if(settings.showAxisNumbers) text(svg,pad.l-10,y(P)+4,String(P),'end','rgba(148,163,184,0.70)',12);}); [60,90,120,150,180].forEach(Y=>{line(svg,x(Y),pad.t,x(Y),H-pad.b,'rgba(148,163,184,0.08)',1); if(settings.showAxisNumbers) text(svg,x(Y),H-pad.b+22,String(Y),'middle','rgba(148,163,184,0.70)',12);}); line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.70)',3); line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.70)',3); text(svg,(pad.l+(W-pad.r))/2,H-18,'Real GDP ($)','middle','rgba(226,232,240,0.92)',15,true); textRot(svg,22,(pad.t+(H-pad.b))/2,'Average Price Level ($)',-90,'middle','rgba(226,232,240,0.92)',15,true);
 const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe}, base=computeFromParams(defaults.params);
-drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true); drawCurveSet(svg,x,y,cur,null,false); if(state.compare.on && state.compare.snapshot){drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,'6 7');}
+drawCurveSet(svg,x,y,base,'rgba(255,255,255,0.22)',true,{showLabels:false});
+drawCurveSet(svg,x,y,cur,null,false,{showLabels:true});
+if(state.compare.on && state.compare.snapshot){
+  drawCurveSet(svg,x,y,computeFromParams(state.compare.snapshot),'rgba(250,204,21,.9)',false,{dash:'6 7',showLabels:false});
+}
 drawEquilibriumGuides(svg,x,y,equilibrium(base),equilibrium(cur),pad,H);
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
 }
-function drawCurveSet(svg,x,y,v,tint,muted=false,dash){
+function drawCurveSet(svg,x,y,v,tint,muted=false,opt={}){
+  const {dash,showLabels=true}=opt;
   const ad=adLineSegment(v.adShiftY).seg;
   if(ad) strokePath(svg,pathFromSegment(x,y,ad),tint||'rgba(239,68,68,0.95)',muted?4:6,dash);
   const as=ASshape(v);
   strokePath(svg,pathFromPoints(x,y,as.pts),tint||'rgba(59,130,246,0.95)',muted?4:6,dash);
+  if(!showLabels) return;
   const adLabel=labelOnAD(svg,x,y,v.adShiftY,tint);
   const yfLabel=drawYfPoint(svg,x,y,as,tint,muted,dash);
   labelOnAS(svg,x,y,as,tint,adLabel,yfLabel);
@@ -315,6 +321,7 @@ function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); 
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
   const pGap=Math.abs(y(baseEq.p)-y(curEq.p));
   const yGap=Math.abs(x(baseEq.y)-x(curEq.y));
+  const eqGap=Math.hypot(x(baseEq.y)-x(curEq.y),y(baseEq.p)-y(curEq.p));
   const axisLabel=(cx,cy,label,stroke)=>{
     const w=34,h=20;
     const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
@@ -322,23 +329,36 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H){
     svg.appendChild(bg);
     text(svg,cx,cy+4,label,'middle','rgba(241,245,249,0.96)',12,true);
   };
-  const drawPoint=(pt,tag,color)=>{
+  const eqLabel=(pt,label,color,dx,dy)=>{
+    const pos=clampLabelPos({x:x(pt.y)+dx,y:y(pt.p)+dy},{left:84,right:832,top:22,bottom:482},18);
+    boxedLabel(svg,pos.x,pos.y,label,color,{fill:'rgba(6,11,22,0.9)'});
+  };
+  const drawPoint=(pt,tag,color,opt={})=>{
+    const pTag=opt.pTag||`P${tag}`;
+    const yTag=opt.yTag||`Y${tag}`;
+    const eqTag=opt.eqTag||`E${tag}`;
+    const eqOffset=opt.eqOffset||[18,-20];
     line(svg,pad.l,y(pt.p),x(pt.y),y(pt.p),color,1.6,'5 6');
     line(svg,x(pt.y),y(pt.p),x(pt.y),H-pad.b,color,1.6,'5 6');
     point(svg,x(pt.y),y(pt.p),5,color);
+    eqLabel(pt,eqTag,color,eqOffset[0],eqOffset[1]);
 
     const pBaseOffset=tag==='1'?-12:12;
-    const pOffset=pGap<24?pBaseOffset:(tag==='1'?-2:2);
-    axisLabel(pad.l-30,y(pt.p)+pOffset,`P${tag}`,color);
+    const pOffset=opt.pOffset ?? (pGap<24?pBaseOffset:(tag==='1'?-2:2));
+    axisLabel(pad.l-30,y(pt.p)+pOffset,pTag,color);
 
     const yBaseOffset=tag==='1'?-22:22;
-    const yOffset=yGap<34?yBaseOffset:0;
-    axisLabel(x(pt.y)+yOffset,H-pad.b+36,`Y${tag}`,color);
+    const yOffset=opt.yOffset ?? (yGap<34?yBaseOffset:0);
+    axisLabel(x(pt.y)+yOffset,H-pad.b+36,yTag,color);
   };
 
   const baseColor='rgba(148,163,184,0.95)',curColor='rgba(248,250,252,0.95)';
+  if(eqGap<10){
+    drawPoint(curEq,'',curColor,{pTag:'P',yTag:'Y',eqTag:'E',pOffset:-2,yOffset:0,eqOffset:[22,-18]});
+    return;
+  }
   drawPoint(baseEq,'1',baseColor);
-  drawPoint(curEq,'2',curColor);
+  drawPoint(curEq,'2',curColor,{eqOffset:[24,18]});
 
   if(Math.abs(curEq.p-baseEq.p)>0.5){
     line(svg,pad.l-46,y(baseEq.p),pad.l-46,y(curEq.p),'rgba(244,114,182,0.95)',2.1);
@@ -519,7 +539,7 @@ function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),axisY=y(G
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v3'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
+function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v4'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
 
 function initResilience(){
   window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));

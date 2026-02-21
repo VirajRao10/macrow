@@ -17,7 +17,10 @@ export const AD=(Y,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return GRAPH.ad
 export const invertAD_Y=(P,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return Y0+(GRAPH.adIntercept-P)/GRAPH.adSlope};
 
 export function ASshape({asShiftP,yFe}){
-  const outputShift=asShiftP*3,shiftedYFe=clamp(yFe-outputShift,GRAPH.Ymin+30,GRAPH.Ymax-10),pFlat=GRAPH.pFlat,yKink=clamp(shiftedYFe-GRAPH.kinkGap,GRAPH.Ymin+8,shiftedYFe-10),pEnd=clamp(pFlat+GRAPH.curveRise,GRAPH.Pmin+10,GRAPH.Pmax-10);
+  const shiftedYFe=clamp(yFe,GRAPH.Ymin+30,GRAPH.Ymax-10);
+  const pFlat=clamp(GRAPH.pFlat+asShiftP,GRAPH.Pmin+8,GRAPH.Pmax-GRAPH.curveRise-8);
+  const yKink=clamp(shiftedYFe-GRAPH.kinkGap,GRAPH.Ymin+8,shiftedYFe-10);
+  const pEnd=clamp(pFlat+GRAPH.curveRise,GRAPH.Pmin+12,GRAPH.Pmax-6);
   const pts=[[GRAPH.Ymin,pFlat],[yKink,pFlat]];
   for(let i=1;i<=60;i++){
     const t=i/60,y=lerp(yKink,shiftedYFe,t),e=(Math.exp(6*t)-1)/(Math.exp(6)-1),p=pFlat+e*(pEnd-pFlat);
@@ -28,10 +31,15 @@ export function ASshape({asShiftP,yFe}){
 }
 
 export function equilibrium(v){
-  const as=ASshape(v),asP=Y=>Y<=as.yKink?as.pFlat:(Y>=as.yFe?as.pEnd:as.pFlat+((Math.exp(6*clamp((Y-as.yKink)/(as.yFe-as.yKink),0,1))-1)/(Math.exp(6)-1))*(as.pEnd-as.pFlat));
+  const as=ASshape(v);
+  const asP=Y=>Y<=as.yKink
+    ? as.pFlat
+    : as.pFlat+((Math.exp(6*clamp((Y-as.yKink)/(as.yFe-as.yKink),0,1))-1)/(Math.exp(6)-1))*(as.pEnd-as.pFlat);
   let pY=GRAPH.Ymin,pH=AD(pY,v.adShiftY)-asP(pY);
+  if(Math.abs(pH)<1e-6) return {y:pY,p:AD(pY,v.adShiftY)};
   for(let i=1;i<=420;i++){
     const Y=lerp(GRAPH.Ymin,as.yFe,i/420),h=AD(Y,v.adShiftY)-asP(Y);
+    if(Math.abs(h)<1e-6) return {y:Y,p:AD(Y,v.adShiftY)};
     if(pH*h<0){
       let lo=pY,hi=Y;
       for(let k=0;k<56;k++){
@@ -43,7 +51,11 @@ export function equilibrium(v){
     }
     pY=Y;pH=h;
   }
-  return {y:v.yFe,p:AD(v.yFe,v.adShiftY)};
+  const pAtYf=AD(as.yFe,v.adShiftY);
+  if(pAtYf>=as.pEnd){
+    return {y:as.yFe,p:clamp(pAtYf,as.pEnd,GRAPH.Pmax-6)};
+  }
+  return {y:as.yFe,p:as.pEnd};
 }
 
 export function clipLineToBox(m,b,box){

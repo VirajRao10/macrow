@@ -22,10 +22,25 @@ describe('economic calculations', () => {
     expect(costPush.asShiftP).toBeGreaterThan(base.asShiftP);
   });
 
+  it('cost-push shock shifts AS upward without moving potential output anchor', () => {
+    const base = ASshape(computeFromParams(defaults.params));
+    const costPush = ASshape(computeFromParams({ ...defaults.params, productionCosts: 90 }));
+    expect(costPush.pFlat).toBeGreaterThan(base.pFlat);
+    expect(costPush.pEnd).toBeGreaterThan(base.pEnd);
+    expect(costPush.yFe).toBeCloseTo(base.yFe, 6);
+  });
+
   it('AS right kink (Yf marker point) remains to the right and above the flat segment kink', () => {
     const base = computeFromParams(defaults.params);
     const as = ASshape(base);
     expect(as.yFe).toBeGreaterThan(as.yKink);
     expect(as.pEnd).toBeGreaterThan(as.pFlat);
+  });
+
+  it('equilibrium remains finite under an extreme inflationary demand shock', () => {
+    const extreme = computeFromParams({ ...defaults.params, govSpending: 100, taxRate: 0, interestRate: 0 });
+    const eq = equilibrium(extreme);
+    expect(Number.isFinite(eq.y)).toBe(true);
+    expect(Number.isFinite(eq.p)).toBe(true);
   });
 });
