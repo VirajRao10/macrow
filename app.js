@@ -264,7 +264,15 @@ function queueRender(){
   pendingRender=true;
   requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
 }
-function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); updateLearnSnapshot(); queueRender(); if(pushHistory) pushPolicyHistory();}
+function onParamsChanged(pushHistory=false){
+  Object.assign(state,computeFromParams(state.params));
+  syncParamReadouts();
+  updateLearnSnapshot();
+  queueRender();
+  const sharePanel=qs('#sharePanel');
+  if(sharePanel && !sharePanel.classList.contains('hidden')) refreshShareLinkPreview();
+  if(pushHistory) pushPolicyHistory();
+}
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
@@ -470,50 +478,94 @@ function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
 async function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
 async function exportScenarioQr(){
-  const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'};
-  const code=buildScenarioURL(s);
   const area=qs('#qrArea');
   area.classList.remove('hidden');
   area.innerHTML='';
+  await renderScenarioQrPreview(area,{width:320,headingText:'QR ready. Scan or download.',includeDownload:true});
+}
 
+function getScenarioForShare(){
+  return scenarios[0]||{name:'Current',params:state.params,category:'custom'};
+}
+
+function refreshShareLinkPreview(){
+  const preview=qs('#shareLinkPreview');
+  if(!preview) return;
+  const link=buildScenarioURL(getScenarioForShare());
+  preview.textContent=link;
+  preview.classList.remove('hidden');
+}
+
+async function copyScenarioShareLink(){
+  const link=buildScenarioURL(getScenarioForShare());
+  try{
+    await navigator.clipboard?.writeText(link);
+    showStatus('Scenario share link copied!');
+  }catch{
+    prompt('Copy scenario URL:',link);
+  }
+  refreshShareLinkPreview();
+}
+
+async function renderScenarioQrPreview(root,opts={}){
+  if(!root) return;
+  const {width=220,headingText='Scan this QR to load the scenario',includeDownload=false}=opts;
+  const payload=getScenarioForShare();
+  const link=buildScenarioURL(payload);
+  root.classList.remove('hidden');
+  root.innerHTML='';
   try{
     await ensureQrLibs();
     const canvas=document.createElement('canvas');
-    await QRCode.toCanvas(canvas,code,{width:320,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
+    await QRCode.toCanvas(canvas,link,{width,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
     const ctx=canvas.getContext('2d');
-
     try{
       const logo=await loadImage('./assets/macrow-logo.png');
-      const sz=68;
-      const x=(canvas.width-sz)/2,y=(canvas.height-sz)/2;
+      const sz=Math.min(68,canvas.width/2.5);
+      const x=(canvas.width-sz)/2;
+      const y=(canvas.height-sz)/2;
       ctx.fillStyle='white';
       roundRect(ctx,x-4,y-4,sz+8,sz+8,14);
       ctx.fill();
       ctx.drawImage(logo,x,y,sz,sz);
     }catch{}
-
     const heading=document.createElement('div');
     heading.className='sectionHint';
-    heading.textContent='QR ready. Scan or download.';
-
-    const downloadBtn=document.createElement('button');
-    downloadBtn.className='btn btn--ghost';
-    downloadBtn.textContent='Download QR image';
-    downloadBtn.onclick=()=>downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
-
-    const copyBtn=document.createElement('button');
-    copyBtn.className='btn btn--ghost';
-    copyBtn.textContent='Copy scenario URL';
-    copyBtn.onclick=async()=>{await navigator.clipboard?.writeText(code); copyBtn.textContent='Copied ✓';};
-
-    const row=document.createElement('div');
-    row.className='scenarioToolbar';
-    row.append(downloadBtn,copyBtn);
-
-    area.append(heading,canvas,row);
+    heading.textContent=headingText;
+    root.append(heading,canvas);
+    if(includeDownload){
+      const ctrl=document.createElement('div');
+      ctrl.className='sharePreview__controls';
+      const downloadBtn=document.createElement('button');
+      downloadBtn.className='btn btn--ghost';
+      downloadBtn.textContent='Download QR';
+      downloadBtn.onclick=()=>downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
+      ctrl.append(downloadBtn);
+      root.append(ctrl);
+    }
   }catch(e){
-    area.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
+    root.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
   }
+}
+
+function initShareTools(){
+  const panel=qs('#sharePanel');
+  if(!panel) return;
+  const opener=qs('#btnOpenSharePanel');
+  const closer=qs('#btnCloseSharePanel');
+  const copyBtn=qs('#btnShareLinkPanel');
+  const qrBtn=qs('#btnShowShareQrPanel');
+  const preview=qs('#shareLinkPreview');
+  const qrArea=qs('#shareQrPreview');
+  opener?.addEventListener('click',()=>{
+    panel.classList.remove('hidden');
+    refreshShareLinkPreview();
+    qrArea?.classList.add('hidden');
+  });
+  closer?.addEventListener('click',()=>panel.classList.add('hidden'));
+  copyBtn?.addEventListener('click',copyScenarioShareLink);
+  preview?.addEventListener('click',copyScenarioShareLink);
+  qrBtn?.addEventListener('click',()=>renderScenarioQrPreview(qrArea,{width:220,headingText:'Scan this QR to load the same scenario',includeDownload:true}));
 }
 let qrStream=null,qrLoopId=null;
 async function startQrScanner(){
@@ -605,6 +657,7 @@ function init(){
   renderAssessPanel();
   renderAboutPanel();
   initScenarioManager();
+  initShareTools();
   syncAssessAvailability();
   setTab('policies');
   showWelcomeIfNeeded();
