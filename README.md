@@ -17,7 +17,7 @@ macrow helps students and teachers:
 - Assessment tab: formative quizzes + competency progression + practice prompts (local storage)
 - Teacher tab: class list, assignment creation from current scenario, local analytics
 - Scenario manager (save/load/delete/import/export/share)
-- Export chart as PNG
+- Export any diagram (AD–AS, Phillips, Money market) as PNG
 - Keyboard shortcuts and accessibility mode
 - Better resilience: loading states, status notifications, global error handling
 - Low-bandwidth optimization: lazy-loaded QR libraries + reduced visual mode on data-saver/2G

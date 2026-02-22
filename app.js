@@ -66,6 +66,7 @@ let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
+const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
@@ -140,9 +141,37 @@ function renderLearnPanel(){
         <button id="btnPcMode" class="btn btn--ghost" type="button">Mode: SRPC</button>
         <button id="btnPcShockLeft" class="btn btn--ghost" type="button">Shift left (adverse shock)</button>
         <button id="btnPcShockRight" class="btn btn--ghost" type="button">Shift right (supply gain)</button>
+        <button id="btnPcReset" class="btn btn--ghost" type="button">Reset</button>
+        <button id="btnExportPcPng" class="btn btn--ghost" type="button">Export Phillips curve (PNG)</button>
       </div>
       <svg id="pcSvg" viewBox="0 0 560 300" role="img" aria-label="Phillips curve diagram"></svg>
       <div id="pcCaption" class="policy__text"></div>
+    </div>
+
+    <div class="sectionTitle">Money market diagram lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnMmMdLeft" class="btn btn--ghost" type="button">Md ←</button>
+        <button id="btnMmMdRight" class="btn btn--ghost" type="button">Md →</button>
+        <button id="btnMmMsLeft" class="btn btn--ghost" type="button">Ms ←</button>
+        <button id="btnMmMsRight" class="btn btn--ghost" type="button">Ms →</button>
+        <button id="btnMmReset" class="btn btn--ghost" type="button">Reset</button>
+        <button id="btnExportMmPng" class="btn btn--ghost" type="button">Export money market (PNG)</button>
+      </div>
+      <label class="policy__text" for="mmPolicyRate">Policy rate anchor: <span id="mmPolicyRateVal">4.0%</span></label>
+      <input id="mmPolicyRate" type="range" min="1" max="10" step="0.1" value="4.0" />
+      <svg id="moneyMarketSvg" viewBox="0 0 560 300" role="img" aria-label="Money market diagram"></svg>
+      <div id="moneyMarketCaption" class="policy__text"></div>
+    </div>
+
+    <div class="sectionTitle">Scenario presets</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnPresetRecession" class="btn btn--ghost" type="button">Load recession</button>
+        <button id="btnPresetInflation" class="btn btn--ghost" type="button">Load inflation</button>
+        <button id="btnPresetGrowth" class="btn btn--ghost" type="button">Load growth</button>
+      </div>
+      <div id="presetFeedback" class="policy__text">Preset tools ready.</div>
     </div>
 
     <div class="sectionTitle">Core revision modules</div>
@@ -159,7 +188,20 @@ function renderLearnPanel(){
   qs('#btnPcMode').onclick=()=>{phillipsState.mode=phillipsState.mode==='srpc'?'lrpc':'srpc'; renderPhillipsCurve();};
   qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=Math.max(-2,phillipsState.shift-1); renderPhillipsCurve();};
   qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=Math.min(2,phillipsState.shift+1); renderPhillipsCurve();};
+  qs('#btnPcReset').onclick=()=>{phillipsState.mode='srpc'; phillipsState.shift=0; renderPhillipsCurve();};
+  qs('#btnMmMdLeft').onclick=()=>{moneyMarketState.mdShift=Math.max(-2,moneyMarketState.mdShift-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMdRight').onclick=()=>{moneyMarketState.mdShift=Math.min(2,moneyMarketState.mdShift+1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsLeft').onclick=()=>{moneyMarketState.msShift=Math.max(-2,moneyMarketState.msShift-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=Math.min(2,moneyMarketState.msShift+1); renderMoneyMarketDiagram();};
+  qs('#btnMmReset').onclick=()=>{moneyMarketState.mdShift=0; moneyMarketState.msShift=0; moneyMarketState.policyRate=4.0; const slider=qs('#mmPolicyRate'); if(slider) slider.value='4.0'; renderMoneyMarketDiagram();};
+  qs('#mmPolicyRate').oninput=e=>{moneyMarketState.policyRate=Number(e.target.value); renderMoneyMarketDiagram();};
+  qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
+  qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
+  qs('#btnPresetGrowth').onclick=()=>applyPresetScenario('growth');
+  qs('#btnExportPcPng').onclick=()=>exportPhillipsCurvePng();
+  qs('#btnExportMmPng').onclick=()=>exportMoneyMarketPng();
   renderPhillipsCurve();
+  renderMoneyMarketDiagram();
   updateLearnSnapshot();
 }
 
@@ -229,6 +271,50 @@ function renderPhillipsCurve(){
   caption.textContent=phillipsState.mode==='srpc'
     ? 'SRPC mode: lower unemployment is linked to higher inflation in the short run. Shift buttons move the whole SRPC left/right.'
     : 'LRPC mode: unemployment tends to return near the natural rate in the long run (vertical LRPC), while inflation can vary.';
+}
+
+function renderMoneyMarketDiagram(){
+  const svg=qs('#moneyMarketSvg');
+  const caption=qs('#moneyMarketCaption');
+  const rateOut=qs('#mmPolicyRateVal');
+  if(!svg||!caption||!rateOut) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=q=>pad.l+((q-35)/130)*(W-pad.l-pad.r);
+  const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
+  const mdShiftPx=moneyMarketState.mdShift*22;
+  const msShiftPx=moneyMarketState.msShift*22;
+  const eqI=clamp(moneyMarketState.policyRate+moneyMarketState.mdShift*0.6-moneyMarketState.msShift*0.6,1.2,10.8);
+  const eqQ=clamp(95+moneyMarketState.mdShift*8+moneyMarketState.msShift*8,40,160);
+  rateOut.textContent=`${moneyMarketState.policyRate.toFixed(1)}%`;
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Quantity of money</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Interest rate (%)</text>
+    <line x1="${x(45)+msShiftPx}" y1="${pad.t+6}" x2="${x(45)+msShiftPx}" y2="${H-pad.b}" stroke="rgba(34,197,94,0.95)" stroke-width="4"/>
+    <text x="${x(45)+msShiftPx+6}" y="${pad.t+18}" fill="rgba(34,197,94,0.95)" font-size="11" font-weight="700">Ms</text>
+    <line x1="${x(52)+mdShiftPx}" y1="${y(10.6)}" x2="${x(154)+mdShiftPx}" y2="${y(2.2)}" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(132)+mdShiftPx}" y="${y(2.8)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">Md</text>
+    <circle cx="${x(eqQ)}" cy="${y(eqI)}" r="5" fill="rgba(250,204,21,0.95)"></circle>
+  `;
+
+  caption.textContent=`Money market equilibrium: i≈${eqI.toFixed(1)}%, Qm≈${eqQ.toFixed(0)}. Md right raises i; Ms right lowers i.`;
+}
+
+function applyPresetScenario(kind){
+  const presets={
+    recession:{params:{govSpending:15,taxRate:45,interestRate:8.5,productionCosts:50,productivity:50},note:'Recession preset loaded: AD weakened, output pressure down.'},
+    inflation:{params:{govSpending:85,taxRate:10,interestRate:1,productionCosts:60,productivity:50},note:'Inflation preset loaded: AD strong with upward price pressure.'},
+    growth:{params:{govSpending:65,taxRate:18,interestRate:2.5,productionCosts:42,productivity:72},note:'Growth preset loaded: stronger capacity and demand support.'}
+  };
+  const p=presets[kind];
+  if(!p) return;
+  state.params={...state.params,...p.params};
+  onParamsChanged(true);
+  const fb=qs('#presetFeedback');
+  if(fb) fb.textContent=p.note;
 }
 
 function renderAssessPanel(){
@@ -665,7 +751,91 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverl
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
-async function exportChartPng(){const svg=qs('#chartSvg').cloneNode(true); svg.setAttribute('xmlns','http://www.w3.org/2000/svg'); svg.setAttribute('width','860'); svg.setAttribute('height','560'); const bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); bg.setAttribute('x','0');bg.setAttribute('y','0');bg.setAttribute('width','860');bg.setAttribute('height','560');bg.setAttribute('fill','#0b1220'); svg.insertBefore(bg,svg.firstChild); const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml'})); const img=new Image(); await new Promise((res,rej)=>{img.onload=res; img.onerror=rej; img.src=url}); const c=document.createElement('canvas'); c.width=1720; c.height=1120; const ctx=c.getContext('2d'); ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`macrow-graph-${Date.now()}.png`; a.click(); URL.revokeObjectURL(url);}
+function getSvgExportDimensions(svg, overrides={}) {
+  const viewBox = svg?.viewBox?.baseVal;
+  const attrWidth = Number(svg?.getAttribute('width'));
+  const attrHeight = Number(svg?.getAttribute('height'));
+  const fallbackWidth = overrides.width ?? 860;
+  const fallbackHeight = overrides.height ?? 560;
+  const widthFromView = viewBox?.width;
+  const heightFromView = viewBox?.height;
+  const width = overrides.width ?? (Number.isFinite(widthFromView) && widthFromView > 0 ? widthFromView : (!Number.isNaN(attrWidth) && attrWidth > 0 ? attrWidth : fallbackWidth));
+  const height = overrides.height ?? (Number.isFinite(heightFromView) && heightFromView > 0 ? heightFromView : (!Number.isNaN(attrHeight) && attrHeight > 0 ? attrHeight : fallbackHeight));
+  return {width,height};
+}
+async function exportSvgAsPng(svg, options={}) {
+  if(!svg) throw new Error('SVG element not available for export.');
+  const {width,height} = getSvgExportDimensions(svg, options);
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  if(!clone.hasAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const backgroundColor = options.backgroundColor ?? '#0b1220';
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('x', '0');
+  bgRect.setAttribute('y', '0');
+  bgRect.setAttribute('width', String(width));
+  bgRect.setAttribute('height', String(height));
+  bgRect.setAttribute('fill', backgroundColor);
+  clone.insertBefore(bgRect, clone.firstChild);
+  const svgMarkup = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([svgMarkup], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    const loadPromise = new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = e => reject(e || new Error('Failed to render SVG for export.'));
+    });
+    img.src = url;
+    await loadPromise;
+    const scale = Math.max(1, options.scale ?? 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext('2d');
+    if(!ctx) throw new Error('Canvas context unavailable.');
+    const canvasBackground = options.canvasBackground ?? backgroundColor;
+    ctx.fillStyle = canvasBackground;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const anchor = document.createElement('a');
+    anchor.href = canvas.toDataURL('image/png');
+    const prefix = options.filePrefix ?? 'macrow-graph';
+    anchor.download = `${prefix}-${Date.now()}.png`;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+async function exportChartPng() {
+  try {
+    await exportSvgAsPng(qs('#chartSvg'), {filePrefix: 'macrow-ad-as', backgroundColor: '#0b1220'});
+    showStatus('Graph exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Graph export failed. Try again.', true);
+  }
+}
+async function exportPhillipsCurvePng() {
+  try {
+    await exportSvgAsPng(qs('#pcSvg'), {filePrefix: 'macrow-phillips-curve', backgroundColor: '#0b1220'});
+    showStatus('Phillips curve exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Phillips curve export failed. Try again.', true);
+  }
+}
+async function exportMoneyMarketPng() {
+  try {
+    await exportSvgAsPng(qs('#moneyMarketSvg'), {filePrefix: 'macrow-money-market', backgroundColor: '#0b1220'});
+    showStatus('Money market diagram exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Money market export failed. Try again.', true);
+  }
+}
 
 function rect(svg,x,y,w,h,r,f){const el=document.createElementNS('http://www.w3.org/2000/svg','rect'); [['x',x],['y',y],['width',w],['height',h],['rx',r],['fill',f]].forEach(([k,v])=>el.setAttribute(k,v)); svg.appendChild(el);} 
 function line(svg,x1,y1,x2,y2,s,w,d){const el=document.createElementNS('http://www.w3.org/2000/svg','line'); [['x1',x1],['y1',y1],['x2',x2],['y2',y2],['stroke',s],['stroke-width',w],['stroke-linecap','round']].forEach(([k,v])=>el.setAttribute(k,v)); if(d)el.setAttribute('stroke-dasharray',d); svg.appendChild(el);} 
