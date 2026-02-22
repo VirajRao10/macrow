@@ -65,6 +65,7 @@ const settings={
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
+const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
@@ -133,6 +134,17 @@ function renderLearnPanel(){
 
     <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
 
+    <div class="sectionTitle">Phillips Curve diagram lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnPcMode" class="btn btn--ghost" type="button">Mode: SRPC</button>
+        <button id="btnPcShockLeft" class="btn btn--ghost" type="button">Shift left (adverse shock)</button>
+        <button id="btnPcShockRight" class="btn btn--ghost" type="button">Shift right (supply gain)</button>
+      </div>
+      <svg id="pcSvg" viewBox="0 0 560 300" role="img" aria-label="Phillips curve diagram"></svg>
+      <div id="pcCaption" class="policy__text"></div>
+    </div>
+
     <div class="sectionTitle">Core revision modules</div>
     ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
     <div class="sectionTitle">IB Macro glossary</div>
@@ -144,6 +156,10 @@ function renderLearnPanel(){
   qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
   qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
   qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
+  qs('#btnPcMode').onclick=()=>{phillipsState.mode=phillipsState.mode==='srpc'?'lrpc':'srpc'; renderPhillipsCurve();};
+  qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=Math.max(-2,phillipsState.shift-1); renderPhillipsCurve();};
+  qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=Math.min(2,phillipsState.shift+1); renderPhillipsCurve();};
+  renderPhillipsCurve();
   updateLearnSnapshot();
 }
 
@@ -178,6 +194,43 @@ function updateLearnSnapshot(){
     <div class="policy__text">Sentence starter: <i>Identify which curve shifts first (AD via demand factors or AS via cost/productivity factors), then explain how Y and P move at the new equilibrium.</i></div>`;
 }
 
+function renderPhillipsCurve(){
+  const svg=qs('#pcSvg');
+  const caption=qs('#pcCaption');
+  const modeBtn=qs('#btnPcMode');
+  if(!svg||!caption||!modeBtn) return;
+  modeBtn.textContent=`Mode: ${phillipsState.mode==='srpc'?'SRPC':'LRPC'}`;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=u=>pad.l+((u-1.5)/8.5)*(W-pad.l-pad.r);
+  const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
+  const shiftPx=phillipsState.shift*22;
+  const currentU=phillipsState.naturalU-(phillipsState.mode==='srpc'?phillipsState.shift*0.45:0);
+  const currentInfl=phillipsState.mode==='srpc'?(phillipsState.inflation+phillipsState.shift*0.75):phillipsState.inflation;
+  const srPath='M 0 0 C 130 14 250 90 360 170 C 420 215 470 250 520 278';
+  const lrX=x(phillipsState.naturalU)+shiftPx;
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Unemployment rate (%)</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Inflation rate (%)</text>
+    <g opacity="0.8">
+      <path d="${srPath}" transform="translate(${pad.l+shiftPx},${pad.t}) scale(0.82,0.78)" fill="none" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+      <text x="${x(7.6)+shiftPx}" y="${y(3.2)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRPC</text>
+      <line x1="${lrX}" y1="${pad.t+4}" x2="${lrX}" y2="${H-pad.b}" stroke="rgba(239,68,68,0.95)" stroke-width="3" stroke-dasharray="${phillipsState.mode==='lrpc'?'':'7 5'}"/>
+      <text x="${lrX+6}" y="${pad.t+18}" fill="rgba(239,68,68,0.95)" font-size="11" font-weight="700">LRPC</text>
+      <circle cx="${x(currentU)+shiftPx*0.35}" cy="${y(currentInfl)}" r="5" fill="rgba(250,204,21,0.95)">
+        <animate attributeName="cx" dur="260ms" to="${x(currentU)+shiftPx*0.35}" fill="freeze" />
+        <animate attributeName="cy" dur="260ms" to="${y(currentInfl)}" fill="freeze" />
+      </circle>
+    </g>`;
+
+  caption.textContent=phillipsState.mode==='srpc'
+    ? 'SRPC mode: lower unemployment is linked to higher inflation in the short run. Shift buttons move the whole SRPC left/right.'
+    : 'LRPC mode: unemployment tends to return near the natural rate in the long run (vertical LRPC), while inflation can vary.';
+}
+
 function renderAssessPanel(){
   const root=qs('#panelAssess');
   const questions=buildQuizQuestions(GLOSSARY);
@@ -200,7 +253,9 @@ function renderAssessPanel(){
     const b=e.target.closest('[data-q]'); if(!b) return;
     const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
     const ok=b.dataset.a===q.answer;
-    qs(`#fb_${q.id}`).textContent=ok?`✅ Correct. Competency: ${q.competency}`:`❌ Not quite. Correct answer: ${q.answer}`;
+    qs(`#fb_${q.id}`).textContent=ok
+      ?`✅ Correct. ${q.explanation||`Competency: ${q.competency}`}`
+      :`❌ Not quite. Correct answer: ${q.answer}. ${q.explanation||''}`;
     progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+(ok?1:0);
     saveProgress(progress);
   };
@@ -476,7 +531,7 @@ function buildScenarioURL(s){
 function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
-async function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
+async function shareScenarioURL(){const url=buildScenarioURL(getScenarioForShare()); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
 async function exportScenarioQr(){
   const area=qs('#qrArea');
   area.classList.remove('hidden');
@@ -485,7 +540,7 @@ async function exportScenarioQr(){
 }
 
 function getScenarioForShare(){
-  return scenarios[0]||{name:'Current',params:state.params,category:'custom'};
+  return {name:'Current',params:deepCopy(state.params),category:'custom'};
 }
 
 function refreshShareLinkPreview(){

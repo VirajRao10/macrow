@@ -26,4 +26,13 @@ describe('assessment generators', () => {
     const highPractice = buildPracticeFromConcepts(glossary, () => 0.9999);
     expect(lowPractice.map(p => p.prompt)).not.toEqual(highPractice.map(p => p.prompt));
   });
+
+  it('includes answer explanations and SRAS/LRAS shift coverage', () => {
+    const questions = buildQuizQuestions(glossary, () => 0.42);
+    expect(questions.every(q => typeof q.explanation === 'string' && q.explanation.length > 0)).toBe(true);
+
+    const combinedText = questions.map(q => `${q.prompt} ${q.answer}`).join(' ');
+    expect(combinedText).toMatch(/SRAS/i);
+    expect(combinedText).toMatch(/LRAS/i);
+  });
 });
