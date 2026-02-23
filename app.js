@@ -20,6 +20,11 @@ const LEARN_TIPS=[
   "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
   "For top-band answers, add assumptions (confidence, spare capacity, policy lag, external shocks)."
 ];
+const LEARN_NAV_LINKS=[
+  {label:'Guidance',target:'learnGuidance'},
+  {label:'Labs',target:'learnLabs'},
+  {label:'Resources',target:'learnResources'}
+];
 const LEARN_MODULES=[
   {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
   {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
@@ -239,104 +244,143 @@ const paramDefs=[
 function renderParametersPanel(){const root=qs('#panelParameters'); root.innerHTML='<div class="sectionTitle">Explore drivers</div>'; paramDefs.forEach(d=>{const wrap=document.createElement('div'); wrap.className='slider'; wrap.innerHTML=`<div class="slider__top"><div><div class="slider__label">${d.label}</div><div class="slider__hint">${d.hint}</div></div><div class="slider__value" id="val_${d.key}">—</div></div><input type="range" id="rng_${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" />`; root.appendChild(wrap);}); paramDefs.forEach(d=>{const rng=qs(`#rng_${d.key}`); rng.value=state.params[d.key]; rng.oninput=()=>{state.params[d.key]=Number(rng.value); onParamsChanged(true);}; addSwipeAdjust(rng,d.step);}); syncParamReadouts();}
 function renderLearnPanel(){
   const root=qs('#panelLearn');
+
   root.innerHTML=`
     <div class="sectionTitle">IB Learn mode</div>
     <div class="sectionHint">Structured for Paper 1/2 AD–AS explanations and strong evaluation chains.</div>
-    ${LEARN_TIPS.map(t=>`<div class="learnCard">💡 ${escapeHtml(t)}</div>`).join('')}
-
-    <div class="sectionTitle">Classroom investigations</div>
-    <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
-        <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
-        <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
-      </div>
-      <textarea id="learnInvestigationText" class="textInput learnTextarea" rows="7" aria-label="Classroom investigation brief"></textarea>
-      <div class="policy__text">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
+    <div class="learnNav" role="tablist" aria-label="Learn navigation">
+      ${LEARN_NAV_LINKS.map(link=>`<button type="button" class="learnNav__button" data-target="${link.target}">${escapeHtml(link.label)}</button>`).join('')}
     </div>
 
-    <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
-
-    <div class="sectionTitle">Phillips Curve diagram lab</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnPcMode" class="btn btn--ghost" type="button">Mode: SRPC</button>
-        <button id="btnPcShockLeft" class="btn btn--ghost" type="button">Shift left (adverse shock)</button>
-        <button id="btnPcShockRight" class="btn btn--ghost" type="button">Shift right (supply gain)</button>
-        <button id="btnPcReset" class="btn btn--ghost" type="button">Reset</button>
-        <button id="btnExportPcPng" class="btn btn--ghost" type="button">Export Phillips curve (PNG)</button>
+    <div id="learnGuidance" class="learnSection">
+      <div class="sectionTitle">Classroom guidance</div>
+      <div class="sectionHint">Quick tips, investigations, and snapshots guide exam-style explanations.</div>
+      <div class="learnTipsGrid">
+        ${LEARN_TIPS.map(t=>`<div class="learnCard learnTipCard">💡 ${escapeHtml(t)}</div>`).join('')}
       </div>
-      <svg id="pcSvg" viewBox="0 0 560 300" role="img" aria-label="Phillips curve diagram"></svg>
-      <div id="pcCaption" class="policy__text"></div>
+
+      <div class="sectionTitle">Classroom investigations</div>
+      <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
+      <div class="learnCard">
+        <div class="scenarioToolbar learnActions">
+          <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
+          <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
+          <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
+        </div>
+        <textarea id="learnInvestigationText" class="textInput learnTextarea" rows="7" aria-label="Classroom investigation brief"></textarea>
+        <div class="policy__text">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
+      </div>
+
+      <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
     </div>
 
-    <div class="sectionTitle">Money market diagram lab</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnMmMdLeft" class="btn btn--ghost" type="button">Md ←</button>
-        <button id="btnMmMdRight" class="btn btn--ghost" type="button">Md →</button>
-        <button id="btnMmMsLeft" class="btn btn--ghost" type="button">Ms ←</button>
-        <button id="btnMmMsRight" class="btn btn--ghost" type="button">Ms →</button>
-        <button id="btnMmReset" class="btn btn--ghost" type="button">Reset</button>
-        <button id="btnExportMmPng" class="btn btn--ghost" type="button">Export money market (PNG)</button>
+    <div id="learnLabs" class="learnSection">
+      <div class="sectionTitle">Hands-on labs</div>
+      <div class="sectionHint">Rotate through diagram labs built for the IB macro syllabus.</div>
+
+      <div class="learnLab" id="labPhillips">
+        <div class="sectionTitle">Phillips Curve diagram lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnPcMode" class="btn btn--ghost" type="button">Mode: SRPC</button>
+            <button id="btnPcShockLeft" class="btn btn--ghost" type="button">Shift left (adverse shock)</button>
+            <button id="btnPcShockRight" class="btn btn--ghost" type="button">Shift right (supply gain)</button>
+            <button id="btnPcReset" class="btn btn--ghost" type="button">Reset</button>
+            <button id="btnExportPcPng" class="btn btn--ghost" type="button">Export Phillips curve (PNG)</button>
+          </div>
+          <svg id="pcSvg" viewBox="0 0 560 300" role="img" aria-label="Phillips curve diagram"></svg>
+          <div id="pcCaption" class="policy__text"></div>
+        </div>
       </div>
-      <label class="policy__text" for="mmPolicyRate">Policy rate anchor: <span id="mmPolicyRateVal">4.0%</span></label>
-      <input id="mmPolicyRate" type="range" min="1" max="10" step="0.1" value="4.0" />
-      <svg id="moneyMarketSvg" viewBox="0 0 560 300" role="img" aria-label="Money market diagram"></svg>
-      <div id="moneyMarketCaption" class="policy__text"></div>
+
+      <div class="learnLab" id="labMoneyMarket">
+        <div class="sectionTitle">Money market diagram lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnMmMdLeft" class="btn btn--ghost" type="button">Md ←</button>
+            <button id="btnMmMdRight" class="btn btn--ghost" type="button">Md →</button>
+            <button id="btnMmMsLeft" class="btn btn--ghost" type="button">Ms ←</button>
+            <button id="btnMmMsRight" class="btn btn--ghost" type="button">Ms →</button>
+            <button id="btnMmReset" class="btn btn--ghost" type="button">Reset</button>
+            <button id="btnExportMmPng" class="btn btn--ghost" type="button">Export money market (PNG)</button>
+          </div>
+          <label class="policy__text" for="mmPolicyRate">Policy rate anchor: <span id="mmPolicyRateVal">4.0%</span></label>
+          <input id="mmPolicyRate" type="range" min="1" max="10" step="0.1" value="4.0" />
+          <svg id="moneyMarketSvg" viewBox="0 0 560 300" role="img" aria-label="Money market diagram"></svg>
+          <div id="moneyMarketCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+      <div class="learnLab" id="labAdComponents">
+        <div class="sectionTitle">Aggregate demand components lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnAdCompCDown" class="btn btn--ghost" type="button">C −</button>
+            <button id="btnAdCompCUp" class="btn btn--ghost" type="button">C +</button>
+            <button id="btnAdCompIDown" class="btn btn--ghost" type="button">I −</button>
+            <button id="btnAdCompIUp" class="btn btn--ghost" type="button">I +</button>
+            <button id="btnAdCompGDown" class="btn btn--ghost" type="button">G −</button>
+            <button id="btnAdCompGUp" class="btn btn--ghost" type="button">G +</button>
+            <button id="btnAdCompNXDown" class="btn btn--ghost" type="button">(X−M) −</button>
+            <button id="btnAdCompNXUp" class="btn btn--ghost" type="button">(X−M) +</button>
+            <button id="btnAdCompReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <svg id="adComponentsSvg" viewBox="0 0 560 300" role="img" aria-label="Aggregate demand components diagram"></svg>
+          <div id="adComponentsCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+      <div class="learnLab" id="labPpf">
+        <div class="sectionTitle">PPF (Production Possibility Frontier) lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnPpfCapitalLeft" class="btn btn--ghost" type="button">Capital goods bias ←</button>
+            <button id="btnPpfCapitalRight" class="btn btn--ghost" type="button">Capital goods bias →</button>
+            <button id="btnPpfTechDown" class="btn btn--ghost" type="button">Technology −</button>
+            <button id="btnPpfTechUp" class="btn btn--ghost" type="button">Technology +</button>
+            <button id="btnPpfReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <svg id="ppfSvg" viewBox="0 0 560 300" role="img" aria-label="Production possibility frontier diagram"></svg>
+          <div id="ppfCaption" class="policy__text"></div>
+        </div>
+      </div>
     </div>
 
-    <div class="sectionTitle">Aggregate demand components lab</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnAdCompCDown" class="btn btn--ghost" type="button">C −</button>
-        <button id="btnAdCompCUp" class="btn btn--ghost" type="button">C +</button>
-        <button id="btnAdCompIDown" class="btn btn--ghost" type="button">I −</button>
-        <button id="btnAdCompIUp" class="btn btn--ghost" type="button">I +</button>
-        <button id="btnAdCompGDown" class="btn btn--ghost" type="button">G −</button>
-        <button id="btnAdCompGUp" class="btn btn--ghost" type="button">G +</button>
-        <button id="btnAdCompNXDown" class="btn btn--ghost" type="button">(X−M) −</button>
-        <button id="btnAdCompNXUp" class="btn btn--ghost" type="button">(X−M) +</button>
-        <button id="btnAdCompReset" class="btn btn--ghost" type="button">Reset</button>
+    <div id="learnResources" class="learnSection">
+      <div class="sectionTitle">Resources & revision</div>
+      <div class="sectionHint">Presets, revision modules, glossary, and flashcards keep IB terms accessible.</div>
+
+      <div class="sectionTitle">Scenario presets</div>
+      <div class="learnCard">
+        <div class="scenarioToolbar learnActions">
+          <button id="btnPresetRecession" class="btn btn--ghost" type="button">Load recession</button>
+          <button id="btnPresetInflation" class="btn btn--ghost" type="button">Load inflation</button>
+          <button id="btnPresetGrowth" class="btn btn--ghost" type="button">Load growth</button>
+        </div>
+        <div id="presetFeedback" class="policy__text">Preset tools ready.</div>
       </div>
-      <svg id="adComponentsSvg" viewBox="0 0 560 300" role="img" aria-label="Aggregate demand components diagram"></svg>
-      <div id="adComponentsCaption" class="policy__text"></div>
+
+      <div class="sectionTitle">Core revision modules</div>
+      ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
+
+      <div class="sectionTitle">IB Macro glossary</div>
+      <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
+      ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}
+
+      <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
+      <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
+      <div id="flashcardRoot"></div>
     </div>
-
-    <div class="sectionTitle">PPF (Production Possibility Frontier) lab</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnPpfCapitalLeft" class="btn btn--ghost" type="button">Capital goods bias ←</button>
-        <button id="btnPpfCapitalRight" class="btn btn--ghost" type="button">Capital goods bias →</button>
-        <button id="btnPpfTechDown" class="btn btn--ghost" type="button">Technology −</button>
-        <button id="btnPpfTechUp" class="btn btn--ghost" type="button">Technology +</button>
-        <button id="btnPpfReset" class="btn btn--ghost" type="button">Reset</button>
-      </div>
-      <svg id="ppfSvg" viewBox="0 0 560 300" role="img" aria-label="Production possibility frontier diagram"></svg>
-      <div id="ppfCaption" class="policy__text"></div>
-    </div>
-
-    <div class="sectionTitle">Scenario presets</div>
-    <div class="learnCard">
-      <div class="scenarioToolbar learnActions">
-        <button id="btnPresetRecession" class="btn btn--ghost" type="button">Load recession</button>
-        <button id="btnPresetInflation" class="btn btn--ghost" type="button">Load inflation</button>
-        <button id="btnPresetGrowth" class="btn btn--ghost" type="button">Load growth</button>
-      </div>
-      <div id="presetFeedback" class="policy__text">Preset tools ready.</div>
-    </div>
-
-    <div class="sectionTitle">Core revision modules</div>
-    ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
-    <div class="sectionTitle">IB Macro glossary</div>
-    <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
-    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}
-
-    <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
-    <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
-    <div id="flashcardRoot"></div>`;
-
+  `;
+  const learnNavButtons=root.querySelectorAll('.learnNav__button');
+  learnNavButtons.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      learnNavButtons.forEach(b=>b.classList.toggle('learnNav__button--active',b===btn));
+      const target=qs(`#${btn.dataset.target}`);
+      if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+  if(learnNavButtons[0]) learnNavButtons[0].classList.add('learnNav__button--active');
   const txt=qs('#learnInvestigationText');
   txt.value=buildInvestigationBrief();
   qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
