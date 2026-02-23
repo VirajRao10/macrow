@@ -8,6 +8,7 @@ const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorA
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
+const FLASHCARD_STORAGE_KEY="macrow_flashcards_srs_v1";
 const KEYBOARD_SHORTCUTS=[
   {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
@@ -65,6 +66,10 @@ const settings={
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
+let flashcardProgress=loadFlashcardProgress();
+const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
+const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
+const aggregateDemandState={cShift:0,iShift:0,gShift:0,nxShift:0};
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
@@ -133,17 +138,105 @@ function renderLearnPanel(){
 
     <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
 
+    <div class="sectionTitle">Phillips Curve diagram lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnPcMode" class="btn btn--ghost" type="button">Mode: SRPC</button>
+        <button id="btnPcShockLeft" class="btn btn--ghost" type="button">Shift left (adverse shock)</button>
+        <button id="btnPcShockRight" class="btn btn--ghost" type="button">Shift right (supply gain)</button>
+        <button id="btnPcReset" class="btn btn--ghost" type="button">Reset</button>
+        <button id="btnExportPcPng" class="btn btn--ghost" type="button">Export Phillips curve (PNG)</button>
+      </div>
+      <svg id="pcSvg" viewBox="0 0 560 300" role="img" aria-label="Phillips curve diagram"></svg>
+      <div id="pcCaption" class="policy__text"></div>
+    </div>
+
+    <div class="sectionTitle">Money market diagram lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnMmMdLeft" class="btn btn--ghost" type="button">Md ←</button>
+        <button id="btnMmMdRight" class="btn btn--ghost" type="button">Md →</button>
+        <button id="btnMmMsLeft" class="btn btn--ghost" type="button">Ms ←</button>
+        <button id="btnMmMsRight" class="btn btn--ghost" type="button">Ms →</button>
+        <button id="btnMmReset" class="btn btn--ghost" type="button">Reset</button>
+        <button id="btnExportMmPng" class="btn btn--ghost" type="button">Export money market (PNG)</button>
+      </div>
+      <label class="policy__text" for="mmPolicyRate">Policy rate anchor: <span id="mmPolicyRateVal">4.0%</span></label>
+      <input id="mmPolicyRate" type="range" min="1" max="10" step="0.1" value="4.0" />
+      <svg id="moneyMarketSvg" viewBox="0 0 560 300" role="img" aria-label="Money market diagram"></svg>
+      <div id="moneyMarketCaption" class="policy__text"></div>
+    </div>
+
+    <div class="sectionTitle">Aggregate demand components lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnAdCompCDown" class="btn btn--ghost" type="button">C −</button>
+        <button id="btnAdCompCUp" class="btn btn--ghost" type="button">C +</button>
+        <button id="btnAdCompIDown" class="btn btn--ghost" type="button">I −</button>
+        <button id="btnAdCompIUp" class="btn btn--ghost" type="button">I +</button>
+        <button id="btnAdCompGDown" class="btn btn--ghost" type="button">G −</button>
+        <button id="btnAdCompGUp" class="btn btn--ghost" type="button">G +</button>
+        <button id="btnAdCompNXDown" class="btn btn--ghost" type="button">(X−M) −</button>
+        <button id="btnAdCompNXUp" class="btn btn--ghost" type="button">(X−M) +</button>
+        <button id="btnAdCompReset" class="btn btn--ghost" type="button">Reset</button>
+      </div>
+      <svg id="adComponentsSvg" viewBox="0 0 560 300" role="img" aria-label="Aggregate demand components diagram"></svg>
+      <div id="adComponentsCaption" class="policy__text"></div>
+    </div>
+
+    <div class="sectionTitle">Scenario presets</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnPresetRecession" class="btn btn--ghost" type="button">Load recession</button>
+        <button id="btnPresetInflation" class="btn btn--ghost" type="button">Load inflation</button>
+        <button id="btnPresetGrowth" class="btn btn--ghost" type="button">Load growth</button>
+      </div>
+      <div id="presetFeedback" class="policy__text">Preset tools ready.</div>
+    </div>
+
     <div class="sectionTitle">Core revision modules</div>
     ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
     <div class="sectionTitle">IB Macro glossary</div>
     <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
-    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
+    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}
+
+    <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
+    <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
+    <div id="flashcardRoot"></div>`;
 
   const txt=qs('#learnInvestigationText');
   txt.value=buildInvestigationBrief();
   qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
   qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
   qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
+  qs('#btnPcMode').onclick=()=>{phillipsState.mode=phillipsState.mode==='srpc'?'lrpc':'srpc'; renderPhillipsCurve();};
+  qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=Math.max(-2,phillipsState.shift-1); renderPhillipsCurve();};
+  qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=Math.min(2,phillipsState.shift+1); renderPhillipsCurve();};
+  qs('#btnPcReset').onclick=()=>{phillipsState.mode='srpc'; phillipsState.shift=0; renderPhillipsCurve();};
+  qs('#btnMmMdLeft').onclick=()=>{moneyMarketState.mdShift=Math.max(-2,moneyMarketState.mdShift-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMdRight').onclick=()=>{moneyMarketState.mdShift=Math.min(2,moneyMarketState.mdShift+1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsLeft').onclick=()=>{moneyMarketState.msShift=Math.max(-2,moneyMarketState.msShift-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=Math.min(2,moneyMarketState.msShift+1); renderMoneyMarketDiagram();};
+  qs('#btnMmReset').onclick=()=>{moneyMarketState.mdShift=0; moneyMarketState.msShift=0; moneyMarketState.policyRate=4.0; const slider=qs('#mmPolicyRate'); if(slider) slider.value='4.0'; renderMoneyMarketDiagram();};
+  qs('#mmPolicyRate').oninput=e=>{moneyMarketState.policyRate=Number(e.target.value); renderMoneyMarketDiagram();};
+  qs('#btnAdCompCDown').onclick=()=>{aggregateDemandState.cShift=Math.max(-2,aggregateDemandState.cShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompCUp').onclick=()=>{aggregateDemandState.cShift=Math.min(2,aggregateDemandState.cShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIDown').onclick=()=>{aggregateDemandState.iShift=Math.max(-2,aggregateDemandState.iShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIUp').onclick=()=>{aggregateDemandState.iShift=Math.min(2,aggregateDemandState.iShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGDown').onclick=()=>{aggregateDemandState.gShift=Math.max(-2,aggregateDemandState.gShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGUp').onclick=()=>{aggregateDemandState.gShift=Math.min(2,aggregateDemandState.gShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=Math.max(-2,aggregateDemandState.nxShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=Math.min(2,aggregateDemandState.nxShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompReset').onclick=()=>{aggregateDemandState.cShift=0;aggregateDemandState.iShift=0;aggregateDemandState.gShift=0;aggregateDemandState.nxShift=0; renderAggregateDemandComponents();};
+  qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
+  qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
+  qs('#btnPresetGrowth').onclick=()=>applyPresetScenario('growth');
+  qs('#btnExportPcPng').onclick=()=>exportPhillipsCurvePng();
+  qs('#btnExportMmPng').onclick=()=>exportMoneyMarketPng();
+  renderPhillipsCurve();
+  renderMoneyMarketDiagram();
+  renderAggregateDemandComponents();
+  renderFlashcardModule();
   updateLearnSnapshot();
 }
 
@@ -178,6 +271,206 @@ function updateLearnSnapshot(){
     <div class="policy__text">Sentence starter: <i>Identify which curve shifts first (AD via demand factors or AS via cost/productivity factors), then explain how Y and P move at the new equilibrium.</i></div>`;
 }
 
+function renderPhillipsCurve(){
+  const svg=qs('#pcSvg');
+  const caption=qs('#pcCaption');
+  const modeBtn=qs('#btnPcMode');
+  if(!svg||!caption||!modeBtn) return;
+  modeBtn.textContent=`Mode: ${phillipsState.mode==='srpc'?'SRPC':'LRPC'}`;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=u=>pad.l+((u-1.5)/8.5)*(W-pad.l-pad.r);
+  const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
+  const shiftPx=phillipsState.shift*22;
+  const currentU=phillipsState.naturalU-(phillipsState.mode==='srpc'?phillipsState.shift*0.45:0);
+  const currentInfl=phillipsState.mode==='srpc'?(phillipsState.inflation+phillipsState.shift*0.75):phillipsState.inflation;
+  const srPath='M 0 0 C 130 14 250 90 360 170 C 420 215 470 250 520 278';
+  const lrX=x(phillipsState.naturalU)+shiftPx;
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Unemployment rate (%)</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Inflation rate (%)</text>
+    <g opacity="0.8">
+      <path d="${srPath}" transform="translate(${pad.l+shiftPx},${pad.t}) scale(0.82,0.78)" fill="none" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+      <text x="${x(7.6)+shiftPx}" y="${y(3.2)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRPC</text>
+      <line x1="${lrX}" y1="${pad.t+4}" x2="${lrX}" y2="${H-pad.b}" stroke="rgba(239,68,68,0.95)" stroke-width="3" stroke-dasharray="${phillipsState.mode==='lrpc'?'':'7 5'}"/>
+      <text x="${lrX+6}" y="${pad.t+18}" fill="rgba(239,68,68,0.95)" font-size="11" font-weight="700">LRPC</text>
+      <circle cx="${x(currentU)+shiftPx*0.35}" cy="${y(currentInfl)}" r="5" fill="rgba(250,204,21,0.95)">
+        <animate attributeName="cx" dur="260ms" to="${x(currentU)+shiftPx*0.35}" fill="freeze" />
+        <animate attributeName="cy" dur="260ms" to="${y(currentInfl)}" fill="freeze" />
+      </circle>
+    </g>`;
+
+  caption.textContent=phillipsState.mode==='srpc'
+    ? 'SRPC mode: lower unemployment is linked to higher inflation in the short run. Shift buttons move the whole SRPC left/right.'
+    : 'LRPC mode: unemployment tends to return near the natural rate in the long run (vertical LRPC), while inflation can vary.';
+}
+
+function renderMoneyMarketDiagram(){
+  const svg=qs('#moneyMarketSvg');
+  const caption=qs('#moneyMarketCaption');
+  const rateOut=qs('#mmPolicyRateVal');
+  if(!svg||!caption||!rateOut) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=q=>pad.l+((q-35)/130)*(W-pad.l-pad.r);
+  const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
+  const mdShiftPx=moneyMarketState.mdShift*22;
+  const msShiftPx=moneyMarketState.msShift*22;
+  const eqI=clamp(moneyMarketState.policyRate+moneyMarketState.mdShift*0.6-moneyMarketState.msShift*0.6,1.2,10.8);
+  const eqQ=clamp(95+moneyMarketState.mdShift*8+moneyMarketState.msShift*8,40,160);
+  rateOut.textContent=`${moneyMarketState.policyRate.toFixed(1)}%`;
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Quantity of money</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Interest rate (%)</text>
+    <line x1="${x(45)+msShiftPx}" y1="${pad.t+6}" x2="${x(45)+msShiftPx}" y2="${H-pad.b}" stroke="rgba(34,197,94,0.95)" stroke-width="4"/>
+    <text x="${x(45)+msShiftPx+6}" y="${pad.t+18}" fill="rgba(34,197,94,0.95)" font-size="11" font-weight="700">Ms</text>
+    <line x1="${x(52)+mdShiftPx}" y1="${y(10.6)}" x2="${x(154)+mdShiftPx}" y2="${y(2.2)}" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(132)+mdShiftPx}" y="${y(2.8)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">Md</text>
+    <circle cx="${x(eqQ)}" cy="${y(eqI)}" r="5" fill="rgba(250,204,21,0.95)"></circle>
+  `;
+
+  caption.textContent=`Money market equilibrium: i≈${eqI.toFixed(1)}%, Qm≈${eqQ.toFixed(0)}. Md right raises i; Ms right lowers i.`;
+}
+
+function renderAggregateDemandComponents(){
+  const svg=qs('#adComponentsSvg');
+  const caption=qs('#adComponentsCaption');
+  if(!svg||!caption) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=q=>pad.l+((q-40)/120)*(W-pad.l-pad.r);
+  const y=p=>pad.t+((11.5-p)/10.5)*(H-pad.t-pad.b);
+  const adShift=(aggregateDemandState.cShift+aggregateDemandState.iShift+aggregateDemandState.gShift+aggregateDemandState.nxShift)*8;
+  const eqQ=clamp(92+adShift*0.8,45,155);
+  const eqP=clamp(5.6+adShift*0.03,1.3,10.8);
+
+  const adStartX=x(52+adShift), adEndX=x(148+adShift);
+  const srasStartX=x(52), srasEndX=x(150);
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Real output (Y)</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Price level (P)</text>
+    <line x1="${adStartX}" y1="${y(10.3)}" x2="${adEndX}" y2="${y(2.0)}" stroke="rgba(239,68,68,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(132+adShift)}" y="${y(2.8)}" fill="rgba(239,68,68,0.95)" font-size="11" font-weight="700">AD</text>
+    <line x1="${srasStartX}" y1="${y(2.2)}" x2="${srasEndX}" y2="${y(10.2)}" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(134)}" y="${y(9.7)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRAS</text>
+    <circle cx="${x(eqQ)}" cy="${y(eqP)}" r="5" fill="rgba(250,204,21,0.95)"/>
+  `;
+
+  caption.textContent=`AD components: C ${aggregateDemandState.cShift>=0?'+':''}${aggregateDemandState.cShift}, I ${aggregateDemandState.iShift>=0?'+':''}${aggregateDemandState.iShift}, G ${aggregateDemandState.gShift>=0?'+':''}${aggregateDemandState.gShift}, (X−M) ${aggregateDemandState.nxShift>=0?'+':''}${aggregateDemandState.nxShift}. Net AD shift changes equilibrium against SRAS.`;
+}
+
+function applyPresetScenario(kind){
+  const presets={
+    recession:{params:{govSpending:15,taxRate:45,interestRate:8.5,productionCosts:50,productivity:50},note:'Recession preset loaded: AD weakened, output pressure down.'},
+    inflation:{params:{govSpending:85,taxRate:10,interestRate:1,productionCosts:60,productivity:50},note:'Inflation preset loaded: AD strong with upward price pressure.'},
+    growth:{params:{govSpending:65,taxRate:18,interestRate:2.5,productionCosts:42,productivity:72},note:'Growth preset loaded: stronger capacity and demand support.'}
+  };
+  const p=presets[kind];
+  if(!p) return;
+  state.params={...state.params,...p.params};
+  onParamsChanged(true);
+  const fb=qs('#presetFeedback');
+  if(fb) fb.textContent=p.note;
+}
+
+function loadFlashcardProgress(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(FLASHCARD_STORAGE_KEY)||'{}');
+    return raw&&typeof raw==='object'?raw:{};
+  }catch{return {};}
+}
+function saveFlashcardProgress(){
+  localStorage.setItem(FLASHCARD_STORAGE_KEY,JSON.stringify(flashcardProgress));
+}
+function getFlashcardMeta(term){
+  const existing=flashcardProgress[term];
+  if(existing&&typeof existing==='object') return existing;
+  const fresh={ease:2.5,intervalDays:0,dueAt:0,reps:0,lapses:0,lastResult:null,lastReviewAt:0};
+  flashcardProgress[term]=fresh;
+  return fresh;
+}
+function dueFlashcardsNow(){
+  const now=Date.now();
+  return GLOSSARY.filter(card=>(getFlashcardMeta(card.term).dueAt||0)<=now);
+}
+function nextFlashcardCard(){
+  const due=dueFlashcardsNow();
+  if(due.length) return due.sort((a,b)=>(getFlashcardMeta(a.term).dueAt||0)-(getFlashcardMeta(b.term).dueAt||0))[0];
+  return GLOSSARY.slice().sort((a,b)=>(getFlashcardMeta(a.term).dueAt||0)-(getFlashcardMeta(b.term).dueAt||0))[0]||null;
+}
+function gradeFlashcard(term,quality){
+  const q=clamp(Number(quality),0,5);
+  const meta=getFlashcardMeta(term);
+  const now=Date.now();
+  if(q<3){
+    meta.reps=0;
+    meta.intervalDays=1;
+    meta.lapses=(meta.lapses||0)+1;
+  }else{
+    meta.reps=(meta.reps||0)+1;
+    if(meta.reps===1) meta.intervalDays=1;
+    else if(meta.reps===2) meta.intervalDays=3;
+    else meta.intervalDays=Math.max(1,Math.round((meta.intervalDays||3)*meta.ease));
+  }
+  meta.ease=Math.max(1.3,Number(((meta.ease||2.5)+(0.1-(5-q)*(0.08+(5-q)*0.02))).toFixed(2)));
+  meta.lastResult=q;
+  meta.lastReviewAt=now;
+  meta.dueAt=now+Math.max(1,meta.intervalDays)*24*60*60*1000;
+  saveFlashcardProgress();
+}
+function resetFlashcards(){
+  flashcardProgress={};
+  saveFlashcardProgress();
+}
+function renderFlashcardModule(){
+  const root=qs('#flashcardRoot');
+  if(!root) return;
+  const dueCount=dueFlashcardsNow().length;
+  const nextCard=nextFlashcardCard();
+  if(!nextCard){
+    root.innerHTML='<div class="policy__text">No glossary cards available.</div>';
+    return;
+  }
+  const meta=getFlashcardMeta(nextCard.term);
+  const dueLabel=meta.dueAt&&meta.dueAt>Date.now()?`Next due: ${new Date(meta.dueAt).toLocaleString()}`:'Due now';
+  root.innerHTML=`
+    <div class="learnCard">
+      <div class="policy__name">Card (${dueCount} due)</div>
+      <div class="policy__text"><b>${escapeHtml(nextCard.term)}</b></div>
+      <div id="flashcardAnswer" class="policy__text hidden">${escapeHtml(nextCard.blurb)}</div>
+      <div class="policy__text">${escapeHtml(dueLabel)} · interval ${meta.intervalDays||0}d · ease ${Number(meta.ease||2.5).toFixed(2)}</div>
+      <div class="scenarioToolbar learnActions">
+        <button id="btnFlashReveal" class="btn btn--primary" type="button">Reveal definition</button>
+        <button id="btnFlashAgain" class="btn btn--ghost hidden" type="button">Again</button>
+        <button id="btnFlashHard" class="btn btn--ghost hidden" type="button">Hard</button>
+        <button id="btnFlashGood" class="btn btn--ghost hidden" type="button">Good</button>
+        <button id="btnFlashEasy" class="btn btn--ghost hidden" type="button">Easy</button>
+        <button id="btnFlashReset" class="btn btn--ghost" type="button">Reset SRS</button>
+      </div>
+    </div>`;
+  const answer=qs('#flashcardAnswer');
+  const reveal=qs('#btnFlashReveal');
+  const gradeBtns=[qs('#btnFlashAgain'),qs('#btnFlashHard'),qs('#btnFlashGood'),qs('#btnFlashEasy')];
+  reveal.onclick=()=>{
+    answer.classList.remove('hidden');
+    reveal.classList.add('hidden');
+    gradeBtns.forEach(b=>b.classList.remove('hidden'));
+  };
+  qs('#btnFlashAgain').onclick=()=>{gradeFlashcard(nextCard.term,1); renderFlashcardModule();};
+  qs('#btnFlashHard').onclick=()=>{gradeFlashcard(nextCard.term,3); renderFlashcardModule();};
+  qs('#btnFlashGood').onclick=()=>{gradeFlashcard(nextCard.term,4); renderFlashcardModule();};
+  qs('#btnFlashEasy').onclick=()=>{gradeFlashcard(nextCard.term,5); renderFlashcardModule();};
+  qs('#btnFlashReset').onclick=()=>{resetFlashcards(); renderFlashcardModule(); showStatus('Flashcard progress reset');};
+}
+
 function renderAssessPanel(){
   const root=qs('#panelAssess');
   const questions=buildQuizQuestions(GLOSSARY);
@@ -200,7 +493,9 @@ function renderAssessPanel(){
     const b=e.target.closest('[data-q]'); if(!b) return;
     const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
     const ok=b.dataset.a===q.answer;
-    qs(`#fb_${q.id}`).textContent=ok?`✅ Correct. Competency: ${q.competency}`:`❌ Not quite. Correct answer: ${q.answer}`;
+    qs(`#fb_${q.id}`).textContent=ok
+      ?`✅ Correct. ${q.explanation||`Competency: ${q.competency}`}`
+      :`❌ Not quite. Correct answer: ${q.answer}. ${q.explanation||''}`;
     progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+(ok?1:0);
     saveProgress(progress);
   };
@@ -264,7 +559,15 @@ function queueRender(){
   pendingRender=true;
   requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
 }
-function onParamsChanged(pushHistory=false){Object.assign(state,computeFromParams(state.params)); syncParamReadouts(); updateLearnSnapshot(); queueRender(); if(pushHistory) pushPolicyHistory();}
+function onParamsChanged(pushHistory=false){
+  Object.assign(state,computeFromParams(state.params));
+  syncParamReadouts();
+  updateLearnSnapshot();
+  queueRender();
+  const sharePanel=qs('#sharePanel');
+  if(sharePanel && !sharePanel.classList.contains('hidden')) refreshShareLinkPreview();
+  if(pushHistory) pushPolicyHistory();
+}
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
@@ -468,52 +771,96 @@ function buildScenarioURL(s){
 function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
-async function shareScenarioURL(){const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'}; const url=buildScenarioURL(s); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
+async function shareScenarioURL(){const url=buildScenarioURL(getScenarioForShare()); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
 async function exportScenarioQr(){
-  const s=scenarios[0]||{name:'Current',params:state.params,category:'custom'};
-  const code=buildScenarioURL(s);
   const area=qs('#qrArea');
   area.classList.remove('hidden');
   area.innerHTML='';
+  await renderScenarioQrPreview(area,{width:320,headingText:'QR ready. Scan or download.',includeDownload:true});
+}
 
+function getScenarioForShare(){
+  return {name:'Current',params:deepCopy(state.params),category:'custom'};
+}
+
+function refreshShareLinkPreview(){
+  const preview=qs('#shareLinkPreview');
+  if(!preview) return;
+  const link=buildScenarioURL(getScenarioForShare());
+  preview.textContent=link;
+  preview.classList.remove('hidden');
+}
+
+async function copyScenarioShareLink(){
+  const link=buildScenarioURL(getScenarioForShare());
+  try{
+    await navigator.clipboard?.writeText(link);
+    showStatus('Scenario share link copied!');
+  }catch{
+    prompt('Copy scenario URL:',link);
+  }
+  refreshShareLinkPreview();
+}
+
+async function renderScenarioQrPreview(root,opts={}){
+  if(!root) return;
+  const {width=220,headingText='Scan this QR to load the scenario',includeDownload=false}=opts;
+  const payload=getScenarioForShare();
+  const link=buildScenarioURL(payload);
+  root.classList.remove('hidden');
+  root.innerHTML='';
   try{
     await ensureQrLibs();
     const canvas=document.createElement('canvas');
-    await QRCode.toCanvas(canvas,code,{width:320,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
+    await QRCode.toCanvas(canvas,link,{width,margin:1,errorCorrectionLevel:'H',color:{dark:'#0f172a',light:'#ffffff'}});
     const ctx=canvas.getContext('2d');
-
     try{
       const logo=await loadImage('./assets/macrow-logo.png');
-      const sz=68;
-      const x=(canvas.width-sz)/2,y=(canvas.height-sz)/2;
+      const sz=Math.min(68,canvas.width/2.5);
+      const x=(canvas.width-sz)/2;
+      const y=(canvas.height-sz)/2;
       ctx.fillStyle='white';
       roundRect(ctx,x-4,y-4,sz+8,sz+8,14);
       ctx.fill();
       ctx.drawImage(logo,x,y,sz,sz);
     }catch{}
-
     const heading=document.createElement('div');
     heading.className='sectionHint';
-    heading.textContent='QR ready. Scan or download.';
-
-    const downloadBtn=document.createElement('button');
-    downloadBtn.className='btn btn--ghost';
-    downloadBtn.textContent='Download QR image';
-    downloadBtn.onclick=()=>downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
-
-    const copyBtn=document.createElement('button');
-    copyBtn.className='btn btn--ghost';
-    copyBtn.textContent='Copy scenario URL';
-    copyBtn.onclick=async()=>{await navigator.clipboard?.writeText(code); copyBtn.textContent='Copied ✓';};
-
-    const row=document.createElement('div');
-    row.className='scenarioToolbar';
-    row.append(downloadBtn,copyBtn);
-
-    area.append(heading,canvas,row);
+    heading.textContent=headingText;
+    root.append(heading,canvas);
+    if(includeDownload){
+      const ctrl=document.createElement('div');
+      ctrl.className='sharePreview__controls';
+      const downloadBtn=document.createElement('button');
+      downloadBtn.className='btn btn--ghost';
+      downloadBtn.textContent='Download QR';
+      downloadBtn.onclick=()=>downloadCanvas(canvas,`macrow-scenario-${Date.now()}.png`);
+      ctrl.append(downloadBtn);
+      root.append(ctrl);
+    }
   }catch(e){
-    area.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
+    root.innerHTML=`<div class="sectionHint">Unable to generate QR right now (${escapeHtml(e?.message||'unknown error')}).</div>`;
   }
+}
+
+function initShareTools(){
+  const panel=qs('#sharePanel');
+  if(!panel) return;
+  const opener=qs('#btnOpenSharePanel');
+  const closer=qs('#btnCloseSharePanel');
+  const copyBtn=qs('#btnShareLinkPanel');
+  const qrBtn=qs('#btnShowShareQrPanel');
+  const preview=qs('#shareLinkPreview');
+  const qrArea=qs('#shareQrPreview');
+  opener?.addEventListener('click',()=>{
+    panel.classList.remove('hidden');
+    refreshShareLinkPreview();
+    qrArea?.classList.add('hidden');
+  });
+  closer?.addEventListener('click',()=>panel.classList.add('hidden'));
+  copyBtn?.addEventListener('click',copyScenarioShareLink);
+  preview?.addEventListener('click',copyScenarioShareLink);
+  qrBtn?.addEventListener('click',()=>renderScenarioQrPreview(qrArea,{width:220,headingText:'Scan this QR to load the same scenario',includeDownload:true}));
 }
 let qrStream=null,qrLoopId=null;
 async function startQrScanner(){
@@ -558,7 +905,91 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverl
 
 function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
 
-async function exportChartPng(){const svg=qs('#chartSvg').cloneNode(true); svg.setAttribute('xmlns','http://www.w3.org/2000/svg'); svg.setAttribute('width','860'); svg.setAttribute('height','560'); const bg=document.createElementNS('http://www.w3.org/2000/svg','rect'); bg.setAttribute('x','0');bg.setAttribute('y','0');bg.setAttribute('width','860');bg.setAttribute('height','560');bg.setAttribute('fill','#0b1220'); svg.insertBefore(bg,svg.firstChild); const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)],{type:'image/svg+xml'})); const img=new Image(); await new Promise((res,rej)=>{img.onload=res; img.onerror=rej; img.src=url}); const c=document.createElement('canvas'); c.width=1720; c.height=1120; const ctx=c.getContext('2d'); ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`macrow-graph-${Date.now()}.png`; a.click(); URL.revokeObjectURL(url);}
+function getSvgExportDimensions(svg, overrides={}) {
+  const viewBox = svg?.viewBox?.baseVal;
+  const attrWidth = Number(svg?.getAttribute('width'));
+  const attrHeight = Number(svg?.getAttribute('height'));
+  const fallbackWidth = overrides.width ?? 860;
+  const fallbackHeight = overrides.height ?? 560;
+  const widthFromView = viewBox?.width;
+  const heightFromView = viewBox?.height;
+  const width = overrides.width ?? (Number.isFinite(widthFromView) && widthFromView > 0 ? widthFromView : (!Number.isNaN(attrWidth) && attrWidth > 0 ? attrWidth : fallbackWidth));
+  const height = overrides.height ?? (Number.isFinite(heightFromView) && heightFromView > 0 ? heightFromView : (!Number.isNaN(attrHeight) && attrHeight > 0 ? attrHeight : fallbackHeight));
+  return {width,height};
+}
+async function exportSvgAsPng(svg, options={}) {
+  if(!svg) throw new Error('SVG element not available for export.');
+  const {width,height} = getSvgExportDimensions(svg, options);
+  const clone = svg.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('width', String(width));
+  clone.setAttribute('height', String(height));
+  if(!clone.hasAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const backgroundColor = options.backgroundColor ?? '#0b1220';
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('x', '0');
+  bgRect.setAttribute('y', '0');
+  bgRect.setAttribute('width', String(width));
+  bgRect.setAttribute('height', String(height));
+  bgRect.setAttribute('fill', backgroundColor);
+  clone.insertBefore(bgRect, clone.firstChild);
+  const svgMarkup = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([svgMarkup], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    const loadPromise = new Promise((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = e => reject(e || new Error('Failed to render SVG for export.'));
+    });
+    img.src = url;
+    await loadPromise;
+    const scale = Math.max(1, options.scale ?? 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    const ctx = canvas.getContext('2d');
+    if(!ctx) throw new Error('Canvas context unavailable.');
+    const canvasBackground = options.canvasBackground ?? backgroundColor;
+    ctx.fillStyle = canvasBackground;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const anchor = document.createElement('a');
+    anchor.href = canvas.toDataURL('image/png');
+    const prefix = options.filePrefix ?? 'macrow-graph';
+    anchor.download = `${prefix}-${Date.now()}.png`;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+async function exportChartPng() {
+  try {
+    await exportSvgAsPng(qs('#chartSvg'), {filePrefix: 'macrow-ad-as', backgroundColor: '#0b1220'});
+    showStatus('Graph exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Graph export failed. Try again.', true);
+  }
+}
+async function exportPhillipsCurvePng() {
+  try {
+    await exportSvgAsPng(qs('#pcSvg'), {filePrefix: 'macrow-phillips-curve', backgroundColor: '#0b1220'});
+    showStatus('Phillips curve exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Phillips curve export failed. Try again.', true);
+  }
+}
+async function exportMoneyMarketPng() {
+  try {
+    await exportSvgAsPng(qs('#moneyMarketSvg'), {filePrefix: 'macrow-money-market', backgroundColor: '#0b1220'});
+    showStatus('Money market diagram exported as PNG');
+  } catch (error) {
+    console.error(error);
+    showStatus('Money market export failed. Try again.', true);
+  }
+}
 
 function rect(svg,x,y,w,h,r,f){const el=document.createElementNS('http://www.w3.org/2000/svg','rect'); [['x',x],['y',y],['width',w],['height',h],['rx',r],['fill',f]].forEach(([k,v])=>el.setAttribute(k,v)); svg.appendChild(el);} 
 function line(svg,x1,y1,x2,y2,s,w,d){const el=document.createElementNS('http://www.w3.org/2000/svg','line'); [['x1',x1],['y1',y1],['x2',x2],['y2',y2],['stroke',s],['stroke-width',w],['stroke-linecap','round']].forEach(([k,v])=>el.setAttribute(k,v)); if(d)el.setAttribute('stroke-dasharray',d); svg.appendChild(el);} 
@@ -605,6 +1036,7 @@ function init(){
   renderAssessPanel();
   renderAboutPanel();
   initScenarioManager();
+  initShareTools();
   syncAssessAvailability();
   setTab('policies');
   showWelcomeIfNeeded();

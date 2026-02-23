@@ -1,4 +1,5 @@
-const CACHE = "macrow-v21";
+const CACHE = "macrow-v23";
+const OFFLINE_URL = "./offline.html";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,7 +9,10 @@ const ASSETS = [
   "./js/storage.js",
   "./js/assessments.js",
   "./manifest.webmanifest",
-  "./assets/macrow-logo.png"
+  "./assets/macrow-logo.png",
+  "./assets/favicon.png",
+  "./assets/apple-touch-icon.png",
+  OFFLINE_URL
 ];
 
 self.addEventListener("install", (event) => {
@@ -28,6 +32,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(event.request);
@@ -35,11 +41,14 @@ self.addEventListener("fetch", (event) => {
 
     try {
       const fresh = await fetch(event.request);
-      if (event.request.method === "GET" && fresh && fresh.ok) {
+      if (fresh && fresh.ok) {
         cache.put(event.request, fresh.clone());
       }
       return fresh;
     } catch {
+      if (event.request.mode === "navigate") {
+        return (await cache.match(OFFLINE_URL)) || new Response("Offline", { status: 200, headers: { "Content-Type": "text/plain" } });
+      }
       return cached || new Response("Offline", { status: 200, headers: { "Content-Type": "text/plain" } });
     }
   })());

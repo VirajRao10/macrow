@@ -105,6 +105,24 @@
               <span class="actionCard__text">Return all macro conditions to neutral</span>
             </button>
           </div>
+          <div class="sharePrompt">
+            <button id="btnOpenSharePanel" class="btn btn--ghost btn--full" type="button">Share this scenario</button>
+          </div>
+          <div id="sharePanel" class="sharePanel hidden" aria-live="polite">
+            <div class="sharePanel__header">
+              <div>
+                <div class="sharePanel__title">Scenario sharing</div>
+                <div class="sharePanel__hint">Copy a link or scan the QR code to load the same setup anywhere.</div>
+              </div>
+              <button id="btnCloseSharePanel" class="iconBtn" type="button" aria-label="Close share tools">✕</button>
+            </div>
+            <div class="sharePanel__controls">
+              <button id="btnShareLinkPanel" class="btn btn--primary" type="button">Copy share link</button>
+              <button id="btnShowShareQrPanel" class="btn btn--ghost" type="button">View QR code</button>
+            </div>
+            <div id="shareLinkPreview" class="sharePanel__link hidden" tabindex="0" role="status"></div>
+            <div id="shareQrPreview" class="sharePreview hidden"></div>
+          </div>
         </div>
       </div>
 
