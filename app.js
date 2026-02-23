@@ -35,6 +35,120 @@ const CLASSROOM_INVESTIGATIONS=[
   "A tax increase is introduced to reduce a widening budget deficit."
 ];
 
+const PARAM_LIMITS = {
+  govSpending:{min:0,max:100},
+  taxRate:{min:0,max:50},
+  interestRate:{min:0,max:10},
+  productionCosts:{min:0,max:100},
+  productivity:{min:0,max:100},
+  supplySideReform:{min:0,max:100}
+};
+const SHIFT_LEVELS = {
+  adStrong:20,
+  adModerate:12,
+  adLight:6,
+  asRightStrong:-5,
+  asRightModerate:-3,
+  asLeftModerate:4,
+  yfBoostStrong:14,
+  yfBoostModerate:10
+};
+const AD_PARAM_EFFECTS={govSpending:0.6,taxRate:-0.9,interestRate:-4};
+const AS_PARAM_EFFECTS={productionCosts:0.6,supplySideReform:-0.3};
+const YFE_PARAM_EFFECTS={productivity:1,supplySideReform:0.5};
+function computeParamDeltas(targetShift,weights,effects){
+  if(!targetShift||!weights) return {};
+  const totalWeight=Object.values(weights).reduce((sum,val)=>sum+val,0);
+  if(totalWeight===0) return {};
+  const contributions={};
+  for(const [key,weight] of Object.entries(weights)){
+    const effect=effects[key];
+    if(!effect) continue;
+    const share=weight/totalWeight;
+    const delta=(targetShift*share)/effect;
+    if(Math.abs(delta)>1e-5) contributions[key]=delta;
+  }
+  return contributions;
+}
+function applyParamDeltas(params,deltas){
+  let next={...params};
+  for(const [key,delta] of Object.entries(deltas)){
+    const limit=PARAM_LIMITS[key];
+    if(!limit) continue;
+    next[key]=clamp(next[key]+delta,limit.min,limit.max);
+  }
+  return next;
+}
+function applyAdShift(params,targetShift,weights){
+  if(!targetShift||!weights) return {...params};
+  const deltas=computeParamDeltas(targetShift,weights,AD_PARAM_EFFECTS);
+  return applyParamDeltas(params,deltas);
+}
+function applyAsShift(params,targetShift,weights){
+  if(!targetShift||!weights) return {...params};
+  const deltas=computeParamDeltas(targetShift,weights,AS_PARAM_EFFECTS);
+  return applyParamDeltas(params,deltas);
+}
+function applyYfShift(params,targetShift,weights){
+  if(!targetShift||!weights) return {...params};
+  const deltas=computeParamDeltas(targetShift,weights,YFE_PARAM_EFFECTS);
+  return applyParamDeltas(params,deltas);
+}
+function applyShiftProfile(params,profile){
+  if(!profile) return {...params};
+  let next={...params};
+  if(profile.ad) next=applyAdShift(next,profile.ad.target,profile.ad.weights);
+  if(profile.as) next=applyAsShift(next,profile.as.target,profile.as.weights);
+  if(profile.yfe) next=applyYfShift(next,profile.yfe.target,profile.yfe.weights);
+  if(profile.manual) next={...next,...profile.manual};
+  return next;
+}
+const SHIFT_PROFILES={
+  fiscal_exp:{ad:{target:SHIFT_LEVELS.adStrong,weights:{govSpending:0.65,taxRate:0.35}}},
+  fiscal_con:{ad:{target:-SHIFT_LEVELS.adStrong,weights:{govSpending:0.65,taxRate:0.35}}},
+  monetary_exp:{ad:{target:SHIFT_LEVELS.adModerate,weights:{interestRate:1}}},
+  monetary_con:{ad:{target:-SHIFT_LEVELS.adModerate,weights:{interestRate:1}}},
+  supply_market:{
+    as:{target:SHIFT_LEVELS.asRightStrong,weights:{productionCosts:0.6,supplySideReform:0.4}},
+    yfe:{target:SHIFT_LEVELS.yfBoostStrong,weights:{supplySideReform:0.45,productivity:0.55}}
+  },
+  supply_intervention:{
+    as:{target:SHIFT_LEVELS.asRightModerate,weights:{productionCosts:0.55,supplySideReform:0.45}},
+    yfe:{target:SHIFT_LEVELS.yfBoostModerate,weights:{supplySideReform:0.55,productivity:0.45}}
+  },
+  preset_recession:{
+    ad:{target:-SHIFT_LEVELS.adStrong,weights:{govSpending:0.6,taxRate:0.4}},
+    note:'Recession preset loaded: demand softens with a strong AD left shift.'
+  },
+  preset_inflation:{
+    ad:{target:SHIFT_LEVELS.adStrong,weights:{govSpending:0.6,taxRate:0.4}},
+    note:'Inflation preset loaded: strong AD right shift (fiscal bias).'
+  },
+  preset_growth:{
+    as:{target:SHIFT_LEVELS.asRightModerate,weights:{productionCosts:0.6,supplySideReform:0.4}},
+    yfe:{target:SHIFT_LEVELS.yfBoostStrong,weights:{supplySideReform:0.5,productivity:0.5}},
+    note:'Growth preset loaded: supply-side push with potential boost.'
+  },
+  cost_push:{
+    as:{target:SHIFT_LEVELS.asLeftModerate,weights:{productionCosts:0.75,supplySideReform:0.25}},
+    note:'Cost-push demo: higher production costs shift AS left.'
+  }
+};
+const policyDefinitions=[
+  {id:'fiscal_exp',name:'Fiscal expansionary',badge:{text:'AD → right',kind:'ad'},definition:'Increase G or reduce taxes.'},
+  {id:'fiscal_con',name:'Fiscal contractionary',badge:{text:'AD → left',kind:'ad'},definition:'Reduce G or raise taxes.'},
+  {id:'monetary_exp',name:'Monetary expansionary',badge:{text:'AD → right',kind:'ad'},definition:'Lower interest rates.'},
+  {id:'monetary_con',name:'Monetary contractionary',badge:{text:'AD → left',kind:'ad'},definition:'Raise interest rates.'},
+  {id:'supply_market',name:'Supply-side market reforms',badge:{text:'AS/LRAS → right',kind:'as'},definition:'Deregulation/competition boosts productivity.'},
+  {id:'supply_intervention',name:'Supply-side intervention',badge:{text:'AS/LRAS → right',kind:'as'},definition:'Training/infrastructure investment.'}
+];
+const policyCards=policyDefinitions.map(def=>({...def,apply:p=>applyShiftProfile(p,SHIFT_PROFILES[def.id])}));
+const PRESET_PROFILE_IDS={
+  recession:'preset_recession',
+  inflation:'preset_inflation',
+  growth:'preset_growth'
+};
+
 const GLOSSARY=[
   {term:"Aggregate Demand (AD)",blurb:"Total planned spending at each price level: C + I + G + (X − M). AD shifts right when spending conditions improve."},
   {term:"Aggregate Supply (AS)",blurb:"Short-run total output producers are willing to supply. It can shift left after cost shocks and right after cost reductions."},
@@ -69,7 +183,20 @@ let progress=loadProgress();
 let flashcardProgress=loadFlashcardProgress();
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
+const MONEY_MARKET_CONFIG={
+  basePolicyRate:4.0,
+  baseMsQuantity:95,
+  qBounds:[45,150],
+  qRange:[35,165],
+  slope:-0.04,
+  mdShiftImpact:0.7,
+  msShiftQuantityImpact:6,
+  msShiftInterestImpact:0.55,
+  interestBounds:[1.2,10.8]
+};
 const aggregateDemandState={cShift:0,iShift:0,gShift:0,nxShift:0};
+const CURVE_SHIFT_CONFIG={min:-2,max:2,step:1};
+const shiftCurve=(value,direction)=>clamp(value+(direction*CURVE_SHIFT_CONFIG.step),CURVE_SHIFT_CONFIG.min,CURVE_SHIFT_CONFIG.max);
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
@@ -93,14 +220,6 @@ function syncAssessAvailability(){
   }
 }
 
-const policyCards=[
-{id:'fiscal_exp',name:'Fiscal expansionary',badge:{text:'AD → right',kind:'ad'},definition:'Increase G or reduce taxes.',apply:p=>({...p,govSpending:clamp(p.govSpending+18,0,100),taxRate:clamp(p.taxRate-8,0,50)})},
-{id:'fiscal_con',name:'Fiscal contractionary',badge:{text:'AD → left',kind:'ad'},definition:'Reduce G or raise taxes.',apply:p=>({...p,govSpending:clamp(p.govSpending-14,0,100),taxRate:clamp(p.taxRate+6,0,50)})},
-{id:'monetary_exp',name:'Monetary expansionary',badge:{text:'AD → right',kind:'ad'},definition:'Lower interest rates.',apply:p=>({...p,interestRate:clamp(p.interestRate-1.3,0,10)})},
-{id:'monetary_con',name:'Monetary contractionary',badge:{text:'AD → left',kind:'ad'},definition:'Raise interest rates.',apply:p=>({...p,interestRate:clamp(p.interestRate+1.3,0,10)})},
-{id:'supply_market',name:'Supply-side market reforms',badge:{text:'AS/LRAS → right',kind:'as'},definition:'Deregulation/competition boosts productivity.',apply:p=>({...p,supplySideReform:clamp(p.supplySideReform+15,0,100),productivity:clamp(p.productivity+8,0,100)})},
-{id:'supply_intervention',name:'Supply-side intervention',badge:{text:'AS/LRAS → right',kind:'as'},definition:'Training/infrastructure investment.',apply:p=>({...p,supplySideReform:clamp(p.supplySideReform+10,0,100),productivity:clamp(p.productivity+12,0,100)})}
-];
 
 function renderPoliciesPanel(){ const root=qs('#panelPolicies'); root.innerHTML='<div class="sectionTitle">Choose a policy</div><div class="sectionHint">Use compare toggle for split-view and replay history for policy paths.</div><label class="toggle"><input id="toggleCompare" type="checkbox"/><span>Split-view compare</span></label><div class="scenarioToolbar"><button id="btnReplayBack" class="btn btn--ghost">◀ Replay</button><button id="btnReplayForward" class="btn btn--ghost">Replay ▶</button></div>';
 policyCards.forEach(pc=>{const el=document.createElement('div'); el.className='policy'; el.innerHTML=`<div class="policy__top"><div><div class="policy__name">${escapeHtml(pc.name)}</div><div class="policy__text">${escapeHtml(pc.definition)}</div></div><button class="btn btn--primary" data-apply="${pc.id}">Apply</button></div>`; root.appendChild(el);});
@@ -210,23 +329,23 @@ function renderLearnPanel(){
   qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
   qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
   qs('#btnPcMode').onclick=()=>{phillipsState.mode=phillipsState.mode==='srpc'?'lrpc':'srpc'; renderPhillipsCurve();};
-  qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=Math.max(-2,phillipsState.shift-1); renderPhillipsCurve();};
-  qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=Math.min(2,phillipsState.shift+1); renderPhillipsCurve();};
+  qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=shiftCurve(phillipsState.shift,-1); renderPhillipsCurve();};
+  qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=shiftCurve(phillipsState.shift,1); renderPhillipsCurve();};
   qs('#btnPcReset').onclick=()=>{phillipsState.mode='srpc'; phillipsState.shift=0; renderPhillipsCurve();};
-  qs('#btnMmMdLeft').onclick=()=>{moneyMarketState.mdShift=Math.max(-2,moneyMarketState.mdShift-1); renderMoneyMarketDiagram();};
-  qs('#btnMmMdRight').onclick=()=>{moneyMarketState.mdShift=Math.min(2,moneyMarketState.mdShift+1); renderMoneyMarketDiagram();};
-  qs('#btnMmMsLeft').onclick=()=>{moneyMarketState.msShift=Math.max(-2,moneyMarketState.msShift-1); renderMoneyMarketDiagram();};
-  qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=Math.min(2,moneyMarketState.msShift+1); renderMoneyMarketDiagram();};
+  qs('#btnMmMdLeft').onclick=()=>{moneyMarketState.mdShift=shiftCurve(moneyMarketState.mdShift,-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMdRight').onclick=()=>{moneyMarketState.mdShift=shiftCurve(moneyMarketState.mdShift,1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsLeft').onclick=()=>{moneyMarketState.msShift=shiftCurve(moneyMarketState.msShift,-1); renderMoneyMarketDiagram();};
+  qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=shiftCurve(moneyMarketState.msShift,1); renderMoneyMarketDiagram();};
   qs('#btnMmReset').onclick=()=>{moneyMarketState.mdShift=0; moneyMarketState.msShift=0; moneyMarketState.policyRate=4.0; const slider=qs('#mmPolicyRate'); if(slider) slider.value='4.0'; renderMoneyMarketDiagram();};
   qs('#mmPolicyRate').oninput=e=>{moneyMarketState.policyRate=Number(e.target.value); renderMoneyMarketDiagram();};
-  qs('#btnAdCompCDown').onclick=()=>{aggregateDemandState.cShift=Math.max(-2,aggregateDemandState.cShift-1); renderAggregateDemandComponents();};
-  qs('#btnAdCompCUp').onclick=()=>{aggregateDemandState.cShift=Math.min(2,aggregateDemandState.cShift+1); renderAggregateDemandComponents();};
-  qs('#btnAdCompIDown').onclick=()=>{aggregateDemandState.iShift=Math.max(-2,aggregateDemandState.iShift-1); renderAggregateDemandComponents();};
-  qs('#btnAdCompIUp').onclick=()=>{aggregateDemandState.iShift=Math.min(2,aggregateDemandState.iShift+1); renderAggregateDemandComponents();};
-  qs('#btnAdCompGDown').onclick=()=>{aggregateDemandState.gShift=Math.max(-2,aggregateDemandState.gShift-1); renderAggregateDemandComponents();};
-  qs('#btnAdCompGUp').onclick=()=>{aggregateDemandState.gShift=Math.min(2,aggregateDemandState.gShift+1); renderAggregateDemandComponents();};
-  qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=Math.max(-2,aggregateDemandState.nxShift-1); renderAggregateDemandComponents();};
-  qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=Math.min(2,aggregateDemandState.nxShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompCDown').onclick=()=>{aggregateDemandState.cShift=shiftCurve(aggregateDemandState.cShift,-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompCUp').onclick=()=>{aggregateDemandState.cShift=shiftCurve(aggregateDemandState.cShift,1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIDown').onclick=()=>{aggregateDemandState.iShift=shiftCurve(aggregateDemandState.iShift,-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIUp').onclick=()=>{aggregateDemandState.iShift=shiftCurve(aggregateDemandState.iShift,1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGDown').onclick=()=>{aggregateDemandState.gShift=shiftCurve(aggregateDemandState.gShift,-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGUp').onclick=()=>{aggregateDemandState.gShift=shiftCurve(aggregateDemandState.gShift,1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,1); renderAggregateDemandComponents();};
   qs('#btnAdCompReset').onclick=()=>{aggregateDemandState.cShift=0;aggregateDemandState.iShift=0;aggregateDemandState.gShift=0;aggregateDemandState.nxShift=0; renderAggregateDemandComponents();};
   qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
   qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
@@ -245,18 +364,35 @@ function buildInvestigationBrief(){
   const eq=equilibrium(cur);
   const caseLine=CLASSROOM_INVESTIGATIONS[Math.floor(Math.random()*CLASSROOM_INVESTIGATIONS.length)];
   const policy=policyCards[Math.floor(Math.random()*policyCards.length)];
+  const outputGap=eq.y-cur.yFe;
+  const gapValue=outputGap===0 ? '0.0' : `${outputGap>0?'+':'-'}${Math.abs(outputGap).toFixed(1)}`;
+  const gapLabel=outputGap>0 ? 'inflationary gap' : outputGap<0 ? 'recessionary gap' : 'balanced gap';
+  const adDescriptor=cur.adShiftY>0 ? 'rightward' : cur.adShiftY<0 ? 'leftward' : 'neutral';
+  const asDescriptor=cur.asShiftP>0 ? 'leftward' : cur.asShiftP<0 ? 'rightward' : 'neutral';
   return [
     'Investigation brief (IB Macro — AD/AS)',
-    `Scenario: ${caseLine}`,
-    `Assigned policy lens: ${policy.name}.`,
+    `Scenario prompt: ${caseLine}`,
+    `Assigned policy lens: ${policy.name} — ${policy.definition}`,
     '',
-    'Student tasks:',
-    '1) Predict whether AD or AS shifts and justify with one transmission channel.',
-    '2) Draw/annotate the initial and new equilibrium (P and Y).',
-    '3) Write a 4-sentence evaluation: short run, long run, a trade-off, and a policy limit.',
+    'Model snapshot:',
+    `- Model anchor: Y = ${eq.y.toFixed(1)}, P = ${eq.p.toFixed(1)}, potential output Yf = ${cur.yFe.toFixed(1)}`,
+    `- Short-run output gap: ${gapValue} (${gapLabel})`,
+    `- Slider signals: AD ${adDescriptor} ${Math.abs(cur.adShiftY).toFixed(1)} units, SRAS shift ${asDescriptor} ${Math.abs(cur.asShiftP).toFixed(1)} units`,
     '',
-    `Current model anchor: Y=${eq.y.toFixed(1)}, P=${eq.p.toFixed(1)}.`
-  ].join('\\n');
+    'Investigation steps (IB command terms):',
+    '1) Analyse the scenario and policy lens: decide which curve moves first, name the transmission channel, and justify the direction using cause-and-effect language.',
+    '2) Draw and label the AD/AS diagram: show the starting point, the new curve position, and the revised short-run equilibrium (P & Y) relative to the anchor.',
+    '3) Explain the short-run outcome (inflation, output, employment) then contrast it with the long-run path anchored at Yf, noting any lags or confidence effects.',
+    '4) Evaluate trade-offs: weigh the policy objective against a clear limit (crowding out, capacity constraints, inflation expectations, or external factors) and recommend whether to augment or pause the policy.',
+    '',
+    'Deliverables:',
+    '- A labelled AD/AS sketch with arrows for curve shifts and annotations for price/output moves.',
+    '- A four-sentence written evaluation covering short run, long run, a policy trade-off, a policy limit, and one stated assumption.',
+    '- Use syllabus-aligned vocabulary (Analyse, Explain, Evaluate, Justify) and cite the dominant transmission channel.',
+    '',
+    `Current reference frame: AD shift = ${cur.adShiftY.toFixed(1)} (${adDescriptor}), AS shift = ${cur.asShiftP.toFixed(1)} (${asDescriptor})`,
+    `Use the ${policy.name} lens to anchor your policy recommendation.`
+  ].join('\n');
 }
 
 function updateLearnSnapshot(){
@@ -281,10 +417,22 @@ function renderPhillipsCurve(){
   const x=u=>pad.l+((u-1.5)/8.5)*(W-pad.l-pad.r);
   const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
   const shiftPx=phillipsState.shift*22;
-  const currentU=phillipsState.naturalU-(phillipsState.mode==='srpc'?phillipsState.shift*0.45:0);
-  const currentInfl=phillipsState.mode==='srpc'?(phillipsState.inflation+phillipsState.shift*0.75):phillipsState.inflation;
-  const srPath='M 0 0 C 130 14 250 90 360 170 C 420 215 470 250 520 278';
-  const lrX=x(phillipsState.naturalU)+shiftPx;
+  const naturalU=phillipsState.naturalU;
+  const modeIsSrpc=phillipsState.mode==='srpc';
+  const srpcInflation=u=>computePhillipsInflation(u,naturalU,phillipsState.inflation,phillipsState.shift);
+  const srpcPoints=[];
+  for(let u=2; u<=10; u+=0.25){
+    srpcPoints.push([x(u)+shiftPx,y(srpcInflation(u))]);
+  }
+  const srpcPath=buildCatmullRomPath(srpcPoints);
+  const highlightBaseU=modeIsSrpc?clamp(naturalU-phillipsState.shift*0.35,2.2,9.2):naturalU;
+  const highlightInfl=modeIsSrpc?srpcInflation(highlightBaseU):phillipsState.inflation;
+  const highlightX=x(highlightBaseU)+(modeIsSrpc?shiftPx:shiftPx*0.35);
+  const highlightY=y(highlightInfl);
+  const labelAnchorU=Math.min(8.2,Math.max(6.2,highlightBaseU+1.1));
+  const srpcLabelX=x(labelAnchorU)+shiftPx;
+  const srpcLabelY=clamp(y(srpcInflation(labelAnchorU))-11,pad.t+20,H-pad.b-18);
+  const lrX=x(naturalU)+shiftPx;
 
   svg.innerHTML=`
     <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
@@ -292,20 +440,46 @@ function renderPhillipsCurve(){
     <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
     <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Unemployment rate (%)</text>
     <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Inflation rate (%)</text>
-    <g opacity="0.8">
-      <path d="${srPath}" transform="translate(${pad.l+shiftPx},${pad.t}) scale(0.82,0.78)" fill="none" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
-      <text x="${x(7.6)+shiftPx}" y="${y(3.2)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRPC</text>
+    <g opacity="0.9">
+      <path d="${srpcPath}" fill="none" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+      <text x="${srpcLabelX}" y="${srpcLabelY}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRPC</text>
       <line x1="${lrX}" y1="${pad.t+4}" x2="${lrX}" y2="${H-pad.b}" stroke="rgba(239,68,68,0.95)" stroke-width="3" stroke-dasharray="${phillipsState.mode==='lrpc'?'':'7 5'}"/>
       <text x="${lrX+6}" y="${pad.t+18}" fill="rgba(239,68,68,0.95)" font-size="11" font-weight="700">LRPC</text>
-      <circle cx="${x(currentU)+shiftPx*0.35}" cy="${y(currentInfl)}" r="5" fill="rgba(250,204,21,0.95)">
-        <animate attributeName="cx" dur="260ms" to="${x(currentU)+shiftPx*0.35}" fill="freeze" />
-        <animate attributeName="cy" dur="260ms" to="${y(currentInfl)}" fill="freeze" />
+      <circle cx="${highlightX}" cy="${highlightY}" r="5" fill="rgba(250,204,21,0.95)">
+        <animate attributeName="cx" dur="260ms" to="${highlightX}" fill="freeze" />
+        <animate attributeName="cy" dur="260ms" to="${highlightY}" fill="freeze" />
       </circle>
     </g>`;
 
-  caption.textContent=phillipsState.mode==='srpc'
-    ? 'SRPC mode: lower unemployment is linked to higher inflation in the short run. Shift buttons move the whole SRPC left/right.'
+  caption.textContent=modeIsSrpc
+    ? 'SRPC mode: short-run trade-off – lower unemployment costs higher inflation. Shift buttons move the whole curve and the highlighted point follows the new trade-off.'
     : 'LRPC mode: unemployment tends to return near the natural rate in the long run (vertical LRPC), while inflation can vary.';
+}
+
+function computePhillipsInflation(u,naturalU,baseInflation,shift){
+  const distance=u-naturalU;
+  const slope=0.82;
+  const curvature=Math.pow(distance,2)*0.034;
+  const shiftImpact=shift*0.45;
+  return clamp(baseInflation+shiftImpact-distance*slope+curvature,1.4,11.8);
+}
+
+function buildCatmullRomPath(points){
+  if(!points.length) return '';
+  if(points.length===1) return `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+  const path=[`M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`];
+  for(let i=0;i<points.length-1;i++){
+    const p0=i===0?points[i]:points[i-1];
+    const p1=points[i];
+    const p2=points[i+1];
+    const p3=i+2<points.length?points[i+2]:p2;
+    const cp1x=p1[0]+(p2[0]-p0[0])/6;
+    const cp1y=p1[1]+(p2[1]-p0[1])/6;
+    const cp2x=p2[0]-(p3[0]-p1[0])/6;
+    const cp2y=p2[1]-(p3[1]-p1[1])/6;
+    path.push(`C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`);
+  }
+  return path.join(' ');
 }
 
 function renderMoneyMarketDiagram(){
@@ -316,10 +490,17 @@ function renderMoneyMarketDiagram(){
   const W=560,H=300,pad={l:64,r:20,t:20,b:46};
   const x=q=>pad.l+((q-35)/130)*(W-pad.l-pad.r);
   const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
-  const mdShiftPx=moneyMarketState.mdShift*22;
-  const msShiftPx=moneyMarketState.msShift*22;
-  const eqI=clamp(moneyMarketState.policyRate+moneyMarketState.mdShift*0.6-moneyMarketState.msShift*0.6,1.2,10.8);
-  const eqQ=clamp(95+moneyMarketState.mdShift*8+moneyMarketState.msShift*8,40,160);
+  const config=MONEY_MARKET_CONFIG;
+  const eqQuantity=clamp(config.baseMsQuantity+moneyMarketState.msShift*config.msShiftQuantityImpact,config.qBounds[0],config.qBounds[1]);
+  const eqInterestRaw=moneyMarketState.policyRate+moneyMarketState.mdShift*config.mdShiftImpact-moneyMarketState.msShift*config.msShiftInterestImpact;
+  const eqInterest=clamp(eqInterestRaw,config.interestBounds[0],config.interestBounds[1]);
+  const intercept=eqInterest-config.slope*eqQuantity;
+  const mdLinePoints=[
+    [config.qRange[0],intercept+config.slope*config.qRange[0]],
+    [config.qRange[1],intercept+config.slope*config.qRange[1]]
+  ];
+  const eqX=x(eqQuantity);
+  const eqY=y(eqInterest);
   rateOut.textContent=`${moneyMarketState.policyRate.toFixed(1)}%`;
 
   svg.innerHTML=`
@@ -328,14 +509,21 @@ function renderMoneyMarketDiagram(){
     <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
     <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Quantity of money</text>
     <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Interest rate (%)</text>
-    <line x1="${x(45)+msShiftPx}" y1="${pad.t+6}" x2="${x(45)+msShiftPx}" y2="${H-pad.b}" stroke="rgba(34,197,94,0.95)" stroke-width="4"/>
-    <text x="${x(45)+msShiftPx+6}" y="${pad.t+18}" fill="rgba(34,197,94,0.95)" font-size="11" font-weight="700">Ms</text>
-    <line x1="${x(52)+mdShiftPx}" y1="${y(10.6)}" x2="${x(154)+mdShiftPx}" y2="${y(2.2)}" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
-    <text x="${x(132)+mdShiftPx}" y="${y(2.8)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">Md</text>
-    <circle cx="${x(eqQ)}" cy="${y(eqI)}" r="5" fill="rgba(250,204,21,0.95)"></circle>
   `;
 
-  caption.textContent=`Money market equilibrium: i≈${eqI.toFixed(1)}%, Qm≈${eqQ.toFixed(0)}. Md right raises i; Ms right lowers i.`;
+  strokePath(svg,pathFromPoints(x,y,mdLinePoints),'rgba(59,130,246,0.95)',4);
+  const msX=x(eqQuantity);
+  line(svg,msX,pad.t+6,msX,H-pad.b,'rgba(34,197,94,0.95)',4);
+  line(svg,pad.l,eqY,eqX-8,eqY,'rgba(250,204,21,0.6)',1.2,'4 4');
+  line(svg,eqX,eqY+8,eqX,H-pad.b,'rgba(250,204,21,0.6)',1.2,'4 4');
+  point(svg,eqX,eqY,5,'rgba(250,204,21,0.95)');
+  text(svg,msX+6,pad.t+18,'Ms','start','rgba(34,197,94,0.95)',11,true);
+  text(svg,x(mdLinePoints[0][0])+8,y(mdLinePoints[0][1])-8,'Md','start','rgba(59,130,246,0.95)',11,true);
+  text(svg,pad.l-10,eqY+4,`${eqInterest.toFixed(1)}%`,'end','rgba(250,204,21,0.95)',11,true);
+  text(svg,eqX,H-pad.b+18,`Q ≈ ${eqQuantity.toFixed(0)}`,'middle','rgba(250,204,21,0.95)',11,true);
+  boxedLabel(svg,eqX+48,eqY-24,'Equilibrium','rgba(250,204,21,0.95)',{fill:'rgba(6,11,22,0.92)'});
+
+  caption.innerHTML=`<b>Money market equilibrium</b>: i ≈ ${eqInterest.toFixed(1)}%, Q ≈ ${eqQuantity.toFixed(0)}. The golden dot marks where downward-sloping Md (blue) meets vertical Ms (green). Policy rate slider lifts/lowers the Md intercept, the Md shift buttons move demand up/down, and the Ms buttons slide the supply column horizontally.`;
 }
 
 function renderAggregateDemandComponents(){
@@ -368,17 +556,14 @@ function renderAggregateDemandComponents(){
 }
 
 function applyPresetScenario(kind){
-  const presets={
-    recession:{params:{govSpending:15,taxRate:45,interestRate:8.5,productionCosts:50,productivity:50},note:'Recession preset loaded: AD weakened, output pressure down.'},
-    inflation:{params:{govSpending:85,taxRate:10,interestRate:1,productionCosts:60,productivity:50},note:'Inflation preset loaded: AD strong with upward price pressure.'},
-    growth:{params:{govSpending:65,taxRate:18,interestRate:2.5,productionCosts:42,productivity:72},note:'Growth preset loaded: stronger capacity and demand support.'}
-  };
-  const p=presets[kind];
-  if(!p) return;
-  state.params={...state.params,...p.params};
+  const profileId=PRESET_PROFILE_IDS[kind];
+  if(!profileId) return;
+  const profile=SHIFT_PROFILES[profileId];
+  if(!profile) return;
+  state.params=applyShiftProfile(deepCopy(defaults.params),profile);
   onParamsChanged(true);
   const fb=qs('#presetFeedback');
-  if(fb) fb.textContent=p.note;
+  if(fb) fb.textContent=profile.note||'Preset loaded.';
 }
 
 function loadFlashcardProgress(){
@@ -546,9 +731,9 @@ function renderAboutPanel(){
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
 
 qs('#btnReset').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
-qs('#btnMakeRecession').onclick=()=>{state.params={...state.params,govSpending:15,taxRate:45,interestRate:8.5,productionCosts:50,productivity:50}; onParamsChanged(true);};
-qs('#btnMakeDemandPull').onclick=()=>{state.params={...state.params,govSpending:85,taxRate:10,interestRate:1.0,productionCosts:50,productivity:50}; onParamsChanged(true);};
-qs('#btnMakeCostPush').onclick=()=>{state.params={...state.params,productionCosts:85}; onParamsChanged(true);};
+qs('#btnMakeRecession').onclick=()=>{state.params=applyShiftProfile(deepCopy(defaults.params),SHIFT_PROFILES.preset_recession); onParamsChanged(true);};
+qs('#btnMakeDemandPull').onclick=()=>{state.params=applyShiftProfile(deepCopy(defaults.params),SHIFT_PROFILES.preset_inflation); onParamsChanged(true);};
+qs('#btnMakeCostPush').onclick=()=>{state.params=applyShiftProfile(deepCopy(defaults.params),SHIFT_PROFILES.cost_push); onParamsChanged(true);};
 qs('#btnClearGap').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
 qs('#toggleAxisNumbers').onchange=e=>{settings.showAxisNumbers=e.target.checked; localStorage.setItem('macrow_show_axis_numbers',settings.showAxisNumbers?'1':'0'); renderMainChart();}; qs('#toggleAxisNumbers').checked=settings.showAxisNumbers;
 qs('#btnExportPng').onclick=()=>exportChartPng();
