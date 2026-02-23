@@ -8,6 +8,7 @@ const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorA
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
+const FLASHCARD_STORAGE_KEY="macrow_flashcards_srs_v1";
 const KEYBOARD_SHORTCUTS=[
   {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
@@ -65,8 +66,10 @@ const settings={
 let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
+let flashcardProgress=loadFlashcardProgress();
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
+const aggregateDemandState={cShift:0,iShift:0,gShift:0,nxShift:0};
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
@@ -164,6 +167,23 @@ function renderLearnPanel(){
       <div id="moneyMarketCaption" class="policy__text"></div>
     </div>
 
+    <div class="sectionTitle">Aggregate demand components lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnAdCompCDown" class="btn btn--ghost" type="button">C −</button>
+        <button id="btnAdCompCUp" class="btn btn--ghost" type="button">C +</button>
+        <button id="btnAdCompIDown" class="btn btn--ghost" type="button">I −</button>
+        <button id="btnAdCompIUp" class="btn btn--ghost" type="button">I +</button>
+        <button id="btnAdCompGDown" class="btn btn--ghost" type="button">G −</button>
+        <button id="btnAdCompGUp" class="btn btn--ghost" type="button">G +</button>
+        <button id="btnAdCompNXDown" class="btn btn--ghost" type="button">(X−M) −</button>
+        <button id="btnAdCompNXUp" class="btn btn--ghost" type="button">(X−M) +</button>
+        <button id="btnAdCompReset" class="btn btn--ghost" type="button">Reset</button>
+      </div>
+      <svg id="adComponentsSvg" viewBox="0 0 560 300" role="img" aria-label="Aggregate demand components diagram"></svg>
+      <div id="adComponentsCaption" class="policy__text"></div>
+    </div>
+
     <div class="sectionTitle">Scenario presets</div>
     <div class="learnCard">
       <div class="scenarioToolbar learnActions">
@@ -178,7 +198,11 @@ function renderLearnPanel(){
     ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
     <div class="sectionTitle">IB Macro glossary</div>
     <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
-    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}`;
+    ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}
+
+    <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
+    <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
+    <div id="flashcardRoot"></div>`;
 
   const txt=qs('#learnInvestigationText');
   txt.value=buildInvestigationBrief();
@@ -195,6 +219,15 @@ function renderLearnPanel(){
   qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=Math.min(2,moneyMarketState.msShift+1); renderMoneyMarketDiagram();};
   qs('#btnMmReset').onclick=()=>{moneyMarketState.mdShift=0; moneyMarketState.msShift=0; moneyMarketState.policyRate=4.0; const slider=qs('#mmPolicyRate'); if(slider) slider.value='4.0'; renderMoneyMarketDiagram();};
   qs('#mmPolicyRate').oninput=e=>{moneyMarketState.policyRate=Number(e.target.value); renderMoneyMarketDiagram();};
+  qs('#btnAdCompCDown').onclick=()=>{aggregateDemandState.cShift=Math.max(-2,aggregateDemandState.cShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompCUp').onclick=()=>{aggregateDemandState.cShift=Math.min(2,aggregateDemandState.cShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIDown').onclick=()=>{aggregateDemandState.iShift=Math.max(-2,aggregateDemandState.iShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompIUp').onclick=()=>{aggregateDemandState.iShift=Math.min(2,aggregateDemandState.iShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGDown').onclick=()=>{aggregateDemandState.gShift=Math.max(-2,aggregateDemandState.gShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompGUp').onclick=()=>{aggregateDemandState.gShift=Math.min(2,aggregateDemandState.gShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=Math.max(-2,aggregateDemandState.nxShift-1); renderAggregateDemandComponents();};
+  qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=Math.min(2,aggregateDemandState.nxShift+1); renderAggregateDemandComponents();};
+  qs('#btnAdCompReset').onclick=()=>{aggregateDemandState.cShift=0;aggregateDemandState.iShift=0;aggregateDemandState.gShift=0;aggregateDemandState.nxShift=0; renderAggregateDemandComponents();};
   qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
   qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
   qs('#btnPresetGrowth').onclick=()=>applyPresetScenario('growth');
@@ -202,6 +235,8 @@ function renderLearnPanel(){
   qs('#btnExportMmPng').onclick=()=>exportMoneyMarketPng();
   renderPhillipsCurve();
   renderMoneyMarketDiagram();
+  renderAggregateDemandComponents();
+  renderFlashcardModule();
   updateLearnSnapshot();
 }
 
@@ -303,6 +338,35 @@ function renderMoneyMarketDiagram(){
   caption.textContent=`Money market equilibrium: i≈${eqI.toFixed(1)}%, Qm≈${eqQ.toFixed(0)}. Md right raises i; Ms right lowers i.`;
 }
 
+function renderAggregateDemandComponents(){
+  const svg=qs('#adComponentsSvg');
+  const caption=qs('#adComponentsCaption');
+  if(!svg||!caption) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=q=>pad.l+((q-40)/120)*(W-pad.l-pad.r);
+  const y=p=>pad.t+((11.5-p)/10.5)*(H-pad.t-pad.b);
+  const adShift=(aggregateDemandState.cShift+aggregateDemandState.iShift+aggregateDemandState.gShift+aggregateDemandState.nxShift)*8;
+  const eqQ=clamp(92+adShift*0.8,45,155);
+  const eqP=clamp(5.6+adShift*0.03,1.3,10.8);
+
+  const adStartX=x(52+adShift), adEndX=x(148+adShift);
+  const srasStartX=x(52), srasEndX=x(150);
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Real output (Y)</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Price level (P)</text>
+    <line x1="${adStartX}" y1="${y(10.3)}" x2="${adEndX}" y2="${y(2.0)}" stroke="rgba(239,68,68,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(132+adShift)}" y="${y(2.8)}" fill="rgba(239,68,68,0.95)" font-size="11" font-weight="700">AD</text>
+    <line x1="${srasStartX}" y1="${y(2.2)}" x2="${srasEndX}" y2="${y(10.2)}" stroke="rgba(59,130,246,0.95)" stroke-width="4" stroke-linecap="round"/>
+    <text x="${x(134)}" y="${y(9.7)}" fill="rgba(59,130,246,0.95)" font-size="11" font-weight="700">SRAS</text>
+    <circle cx="${x(eqQ)}" cy="${y(eqP)}" r="5" fill="rgba(250,204,21,0.95)"/>
+  `;
+
+  caption.textContent=`AD components: C ${aggregateDemandState.cShift>=0?'+':''}${aggregateDemandState.cShift}, I ${aggregateDemandState.iShift>=0?'+':''}${aggregateDemandState.iShift}, G ${aggregateDemandState.gShift>=0?'+':''}${aggregateDemandState.gShift}, (X−M) ${aggregateDemandState.nxShift>=0?'+':''}${aggregateDemandState.nxShift}. Net AD shift changes equilibrium against SRAS.`;
+}
+
 function applyPresetScenario(kind){
   const presets={
     recession:{params:{govSpending:15,taxRate:45,interestRate:8.5,productionCosts:50,productivity:50},note:'Recession preset loaded: AD weakened, output pressure down.'},
@@ -315,6 +379,96 @@ function applyPresetScenario(kind){
   onParamsChanged(true);
   const fb=qs('#presetFeedback');
   if(fb) fb.textContent=p.note;
+}
+
+function loadFlashcardProgress(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(FLASHCARD_STORAGE_KEY)||'{}');
+    return raw&&typeof raw==='object'?raw:{};
+  }catch{return {};}
+}
+function saveFlashcardProgress(){
+  localStorage.setItem(FLASHCARD_STORAGE_KEY,JSON.stringify(flashcardProgress));
+}
+function getFlashcardMeta(term){
+  const existing=flashcardProgress[term];
+  if(existing&&typeof existing==='object') return existing;
+  const fresh={ease:2.5,intervalDays:0,dueAt:0,reps:0,lapses:0,lastResult:null,lastReviewAt:0};
+  flashcardProgress[term]=fresh;
+  return fresh;
+}
+function dueFlashcardsNow(){
+  const now=Date.now();
+  return GLOSSARY.filter(card=>(getFlashcardMeta(card.term).dueAt||0)<=now);
+}
+function nextFlashcardCard(){
+  const due=dueFlashcardsNow();
+  if(due.length) return due.sort((a,b)=>(getFlashcardMeta(a.term).dueAt||0)-(getFlashcardMeta(b.term).dueAt||0))[0];
+  return GLOSSARY.slice().sort((a,b)=>(getFlashcardMeta(a.term).dueAt||0)-(getFlashcardMeta(b.term).dueAt||0))[0]||null;
+}
+function gradeFlashcard(term,quality){
+  const q=clamp(Number(quality),0,5);
+  const meta=getFlashcardMeta(term);
+  const now=Date.now();
+  if(q<3){
+    meta.reps=0;
+    meta.intervalDays=1;
+    meta.lapses=(meta.lapses||0)+1;
+  }else{
+    meta.reps=(meta.reps||0)+1;
+    if(meta.reps===1) meta.intervalDays=1;
+    else if(meta.reps===2) meta.intervalDays=3;
+    else meta.intervalDays=Math.max(1,Math.round((meta.intervalDays||3)*meta.ease));
+  }
+  meta.ease=Math.max(1.3,Number(((meta.ease||2.5)+(0.1-(5-q)*(0.08+(5-q)*0.02))).toFixed(2)));
+  meta.lastResult=q;
+  meta.lastReviewAt=now;
+  meta.dueAt=now+Math.max(1,meta.intervalDays)*24*60*60*1000;
+  saveFlashcardProgress();
+}
+function resetFlashcards(){
+  flashcardProgress={};
+  saveFlashcardProgress();
+}
+function renderFlashcardModule(){
+  const root=qs('#flashcardRoot');
+  if(!root) return;
+  const dueCount=dueFlashcardsNow().length;
+  const nextCard=nextFlashcardCard();
+  if(!nextCard){
+    root.innerHTML='<div class="policy__text">No glossary cards available.</div>';
+    return;
+  }
+  const meta=getFlashcardMeta(nextCard.term);
+  const dueLabel=meta.dueAt&&meta.dueAt>Date.now()?`Next due: ${new Date(meta.dueAt).toLocaleString()}`:'Due now';
+  root.innerHTML=`
+    <div class="learnCard">
+      <div class="policy__name">Card (${dueCount} due)</div>
+      <div class="policy__text"><b>${escapeHtml(nextCard.term)}</b></div>
+      <div id="flashcardAnswer" class="policy__text hidden">${escapeHtml(nextCard.blurb)}</div>
+      <div class="policy__text">${escapeHtml(dueLabel)} · interval ${meta.intervalDays||0}d · ease ${Number(meta.ease||2.5).toFixed(2)}</div>
+      <div class="scenarioToolbar learnActions">
+        <button id="btnFlashReveal" class="btn btn--primary" type="button">Reveal definition</button>
+        <button id="btnFlashAgain" class="btn btn--ghost hidden" type="button">Again</button>
+        <button id="btnFlashHard" class="btn btn--ghost hidden" type="button">Hard</button>
+        <button id="btnFlashGood" class="btn btn--ghost hidden" type="button">Good</button>
+        <button id="btnFlashEasy" class="btn btn--ghost hidden" type="button">Easy</button>
+        <button id="btnFlashReset" class="btn btn--ghost" type="button">Reset SRS</button>
+      </div>
+    </div>`;
+  const answer=qs('#flashcardAnswer');
+  const reveal=qs('#btnFlashReveal');
+  const gradeBtns=[qs('#btnFlashAgain'),qs('#btnFlashHard'),qs('#btnFlashGood'),qs('#btnFlashEasy')];
+  reveal.onclick=()=>{
+    answer.classList.remove('hidden');
+    reveal.classList.add('hidden');
+    gradeBtns.forEach(b=>b.classList.remove('hidden'));
+  };
+  qs('#btnFlashAgain').onclick=()=>{gradeFlashcard(nextCard.term,1); renderFlashcardModule();};
+  qs('#btnFlashHard').onclick=()=>{gradeFlashcard(nextCard.term,3); renderFlashcardModule();};
+  qs('#btnFlashGood').onclick=()=>{gradeFlashcard(nextCard.term,4); renderFlashcardModule();};
+  qs('#btnFlashEasy').onclick=()=>{gradeFlashcard(nextCard.term,5); renderFlashcardModule();};
+  qs('#btnFlashReset').onclick=()=>{resetFlashcards(); renderFlashcardModule(); showStatus('Flashcard progress reset');};
 }
 
 function renderAssessPanel(){
