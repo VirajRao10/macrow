@@ -189,12 +189,13 @@ const MONEY_MARKET_CONFIG={
   qBounds:[45,150],
   qRange:[35,165],
   slope:-0.04,
-  mdShiftImpact:0.7,
+  mdShiftQuantityImpact:8,
   msShiftQuantityImpact:6,
   msShiftInterestImpact:0.55,
   interestBounds:[1.2,10.8]
 };
 const aggregateDemandState={cShift:0,iShift:0,gShift:0,nxShift:0};
+const ppfState={capitalBias:0,technology:0};
 const CURVE_SHIFT_CONFIG={min:-2,max:2,step:1};
 const shiftCurve=(value,direction)=>clamp(value+(direction*CURVE_SHIFT_CONFIG.step),CURVE_SHIFT_CONFIG.min,CURVE_SHIFT_CONFIG.max);
 
@@ -303,6 +304,19 @@ function renderLearnPanel(){
       <div id="adComponentsCaption" class="policy__text"></div>
     </div>
 
+    <div class="sectionTitle">PPF (Production Possibility Frontier) lab</div>
+    <div class="learnCard">
+      <div class="scenarioToolbar learnActions">
+        <button id="btnPpfCapitalLeft" class="btn btn--ghost" type="button">Capital goods bias ←</button>
+        <button id="btnPpfCapitalRight" class="btn btn--ghost" type="button">Capital goods bias →</button>
+        <button id="btnPpfTechDown" class="btn btn--ghost" type="button">Technology −</button>
+        <button id="btnPpfTechUp" class="btn btn--ghost" type="button">Technology +</button>
+        <button id="btnPpfReset" class="btn btn--ghost" type="button">Reset</button>
+      </div>
+      <svg id="ppfSvg" viewBox="0 0 560 300" role="img" aria-label="Production possibility frontier diagram"></svg>
+      <div id="ppfCaption" class="policy__text"></div>
+    </div>
+
     <div class="sectionTitle">Scenario presets</div>
     <div class="learnCard">
       <div class="scenarioToolbar learnActions">
@@ -347,6 +361,11 @@ function renderLearnPanel(){
   qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,-1); renderAggregateDemandComponents();};
   qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,1); renderAggregateDemandComponents();};
   qs('#btnAdCompReset').onclick=()=>{aggregateDemandState.cShift=0;aggregateDemandState.iShift=0;aggregateDemandState.gShift=0;aggregateDemandState.nxShift=0; renderAggregateDemandComponents();};
+  qs('#btnPpfCapitalLeft').onclick=()=>{ppfState.capitalBias=shiftCurve(ppfState.capitalBias,-1); renderPpfDiagram();};
+  qs('#btnPpfCapitalRight').onclick=()=>{ppfState.capitalBias=shiftCurve(ppfState.capitalBias,1); renderPpfDiagram();};
+  qs('#btnPpfTechDown').onclick=()=>{ppfState.technology=shiftCurve(ppfState.technology,-1); renderPpfDiagram();};
+  qs('#btnPpfTechUp').onclick=()=>{ppfState.technology=shiftCurve(ppfState.technology,1); renderPpfDiagram();};
+  qs('#btnPpfReset').onclick=()=>{ppfState.capitalBias=0;ppfState.technology=0; renderPpfDiagram();};
   qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
   qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
   qs('#btnPresetGrowth').onclick=()=>applyPresetScenario('growth');
@@ -355,6 +374,7 @@ function renderLearnPanel(){
   renderPhillipsCurve();
   renderMoneyMarketDiagram();
   renderAggregateDemandComponents();
+  renderPpfDiagram();
   renderFlashcardModule();
   updateLearnSnapshot();
 }
@@ -492,12 +512,13 @@ function renderMoneyMarketDiagram(){
   const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
   const config=MONEY_MARKET_CONFIG;
   const eqQuantity=clamp(config.baseMsQuantity+moneyMarketState.msShift*config.msShiftQuantityImpact,config.qBounds[0],config.qBounds[1]);
-  const eqInterestRaw=moneyMarketState.policyRate+moneyMarketState.mdShift*config.mdShiftImpact-moneyMarketState.msShift*config.msShiftInterestImpact;
+  const mdQuantityShift=moneyMarketState.mdShift*config.mdShiftQuantityImpact;
+  const eqInterestRaw=moneyMarketState.policyRate+(-config.slope)*mdQuantityShift-moneyMarketState.msShift*config.msShiftInterestImpact;
   const eqInterest=clamp(eqInterestRaw,config.interestBounds[0],config.interestBounds[1]);
-  const intercept=eqInterest-config.slope*eqQuantity;
+  const intercept=eqInterest-config.slope*(eqQuantity-mdQuantityShift);
   const mdLinePoints=[
-    [config.qRange[0],intercept+config.slope*config.qRange[0]],
-    [config.qRange[1],intercept+config.slope*config.qRange[1]]
+    [config.qRange[0],intercept+config.slope*(config.qRange[0]-mdQuantityShift)],
+    [config.qRange[1],intercept+config.slope*(config.qRange[1]-mdQuantityShift)]
   ];
   const eqX=x(eqQuantity);
   const eqY=y(eqInterest);
@@ -523,7 +544,7 @@ function renderMoneyMarketDiagram(){
   text(svg,eqX,H-pad.b+18,`Q ≈ ${eqQuantity.toFixed(0)}`,'middle','rgba(250,204,21,0.95)',11,true);
   boxedLabel(svg,eqX+48,eqY-24,'Equilibrium','rgba(250,204,21,0.95)',{fill:'rgba(6,11,22,0.92)'});
 
-  caption.innerHTML=`<b>Money market equilibrium</b>: i ≈ ${eqInterest.toFixed(1)}%, Q ≈ ${eqQuantity.toFixed(0)}. The golden dot marks where downward-sloping Md (blue) meets vertical Ms (green). Policy rate slider lifts/lowers the Md intercept, the Md shift buttons move demand up/down, and the Ms buttons slide the supply column horizontally.`;
+  caption.innerHTML=`<b>Money market equilibrium</b>: i ≈ ${eqInterest.toFixed(1)}%, Q ≈ ${eqQuantity.toFixed(0)}. The golden dot marks where downward-sloping Md (blue) meets vertical Ms (green). Policy rate slider lifts/lowers Md, Md buttons shift demand left/right, and Ms buttons shift money supply left/right.`;
 }
 
 function renderAggregateDemandComponents(){
@@ -553,6 +574,44 @@ function renderAggregateDemandComponents(){
   `;
 
   caption.textContent=`AD components: C ${aggregateDemandState.cShift>=0?'+':''}${aggregateDemandState.cShift}, I ${aggregateDemandState.iShift>=0?'+':''}${aggregateDemandState.iShift}, G ${aggregateDemandState.gShift>=0?'+':''}${aggregateDemandState.gShift}, (X−M) ${aggregateDemandState.nxShift>=0?'+':''}${aggregateDemandState.nxShift}. Net AD shift changes equilibrium against SRAS.`;
+}
+
+function renderPpfDiagram(){
+  const svg=qs('#ppfSvg');
+  const caption=qs('#ppfCaption');
+  if(!svg||!caption) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=g=>pad.l+((g)/100)*(W-pad.l-pad.r);
+  const y=s=>pad.t+((100-s)/100)*(H-pad.t-pad.b);
+  const techShift=ppfState.technology*7;
+  const baseMaxX=94+techShift;
+  const baseMaxY=90+techShift;
+  const bias=ppfState.capitalBias*6;
+  const ppfY=goods=>{
+    const t=clamp(goods/baseMaxX,0,1);
+    return clamp(baseMaxY*(1-Math.pow(t,1.55))+bias*(0.5-t),0,100);
+  };
+  const points=[];
+  for(let g=0;g<=baseMaxX;g+=2){ points.push([x(g),y(ppfY(g))]); }
+  const ppfPath=buildCatmullRomPath(points);
+  const prodX=clamp(52+bias*0.8,8,96);
+  const prodY=ppfY(prodX);
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Capital goods</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Consumer goods</text>
+    <path d="${ppfPath}" fill="none" stroke="rgba(96,165,250,0.95)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="${x(prodX)}" y1="${H-pad.b}" x2="${x(prodX)}" y2="${y(prodY)}" stroke="rgba(250,204,21,0.9)" stroke-width="1.8" stroke-dasharray="5 6"/>
+    <line x1="${pad.l}" y1="${y(prodY)}" x2="${x(prodX)}" y2="${y(prodY)}" stroke="rgba(250,204,21,0.9)" stroke-width="1.8" stroke-dasharray="5 6"/>
+    <circle cx="${x(prodX)}" cy="${y(prodY)}" r="5" fill="rgba(250,204,21,0.95)"/>
+    <text x="${x(prodX)+8}" y="${y(prodY)-8}" fill="rgba(250,204,21,0.95)" font-size="11" font-weight="700">Current mix</text>
+  `;
+
+  const biasLabel=ppfState.capitalBias>0?'capital goods priority':ppfState.capitalBias<0?'consumer goods priority':'balanced allocation';
+  caption.innerHTML=`<b>PPF interpretation</b>: ${biasLabel}, technology shift ${ppfState.technology>=0?'+':''}${ppfState.technology}. Points on the curve are productively efficient; inward/outward shifts represent lower/higher productive capacity.`;
 }
 
 function applyPresetScenario(kind){
