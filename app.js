@@ -7,14 +7,25 @@ const GRAPH=C_GRAPH; const defaults=C_DEFAULTS;
 const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorAll(s)); const deepCopy=x=>JSON.parse(JSON.stringify(x));
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
+const THEME_STORAGE_KEY="macrow_theme_mode_v1";
+const ThemeMode={DARK:"dark",LIGHT:"light"};
+let currentTheme=ThemeMode.DARK;
+function detectSystemPrefersDark(){return typeof window!="undefined"&&typeof window.matchMedia==="function"&&window.matchMedia("(prefers-color-scheme: dark)").matches;}
+function getPreferredTheme(){const stored=localStorage.getItem(THEME_STORAGE_KEY);if(stored===ThemeMode.LIGHT||stored===ThemeMode.DARK)return stored;return detectSystemPrefersDark()?ThemeMode.DARK:ThemeMode.LIGHT;}
+function applyTheme(theme,{persist=true}={}){const nextTheme=theme===ThemeMode.LIGHT?ThemeMode.LIGHT:ThemeMode.DARK;currentTheme=nextTheme;const body=document.body;if(body)body.dataset.theme=nextTheme;if(persist)localStorage.setItem(THEME_STORAGE_KEY,nextTheme);updateThemeToggleUI();}
+function updateThemeToggleUI(){const toggle=qs("#themeToggle");if(!toggle)return;const isDark=currentTheme===ThemeMode.DARK;toggle.setAttribute("aria-pressed",isDark?"true":"false");toggle.setAttribute("aria-label",isDark?"Switch to light mode":"Switch to dark mode");const icon=toggle.querySelector(".themeToggle__icon");const label=toggle.querySelector(".themeToggle__label");if(icon)icon.textContent=isDark?"🌙":"☀️";if(label)label.textContent=isDark?"Dark theme":"Light theme";}
+function initThemeToggle(){const toggle=qs("#themeToggle");if(!toggle)return;toggle.addEventListener("click",()=>{const next=currentTheme===ThemeMode.DARK?ThemeMode.LIGHT:ThemeMode.DARK;applyTheme(next);});updateThemeToggleUI();}
+applyTheme(getPreferredTheme(),{persist:false});
+
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const FLASHCARD_STORAGE_KEY="macrow_flashcards_srs_v1";
+const URL_STATE_PARAM_MAP={govSpending:'gov',taxRate:'tax',interestRate:'interest',productionCosts:'cost',productivity:'prod',supplySideReform:'reform'};
 const KEYBOARD_SHORTCUTS=[
   {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
-  "AD shifts right usually raise real output and the price level in the short run.",
+  "AD shifts right typically raise real output and the price level in the short run.",
   "AS shifts left (cost-push shock) create inflation with weaker growth.",
   "Yf now anchors at the AS right-kink point (where SRAS meets vertical LRAS).",
   "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
@@ -31,6 +42,12 @@ const LEARN_MODULES=[
   {title:"Classroom investigation template",points:["Set a starting state and ask students to predict P/Y before moving any slider.","Apply one policy, then require annotation of what shifted and why.","Compare short-run gains against inflation or unemployment trade-offs.","Finish with a 2–3 sentence evaluation using assumptions and limits."]},
   {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
 ];
+// Video explanation placeholders - concepts that will have video lessons in v2.0
+const VIDEO_CONCEPTS=new Set([
+  "Aggregate Demand (AD)","Aggregate Supply (AS)","Long-run Aggregate Supply (LRAS)",
+  "Recessionary gap","Inflationary gap","Demand-pull inflation","Cost-push inflation",
+  "Multiplier effect","Crowding out","Supply-side policy"
+]);
 const CLASSROOM_INVESTIGATIONS=[
   "A central bank is worried about persistent inflation and weak credibility.",
   "Consumer confidence has fallen after external uncertainty, reducing private spending.",
@@ -186,6 +203,7 @@ let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0
 let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
 let progress=loadProgress();
 let flashcardProgress=loadFlashcardProgress();
+let learnPanelRendered=false;
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
 const MONEY_MARKET_CONFIG={
@@ -206,11 +224,17 @@ const shiftCurve=(value,direction)=>clamp(value+(direction*CURVE_SHIFT_CONFIG.st
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
+function ensureLearnPanelRendered(){
+  if(learnPanelRendered) return;
+  renderLearnPanel();
+  learnPanelRendered=true;
+}
 function setTab(tab){
   if(tab==="assess" && !settings.assessEnabled){
     tab="policies";
   }
   state.tab=tab;
+  if(tab==="learn") ensureLearnPanelRendered();
   navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab));
   ["policies","parameters","learn","assess","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab));
   qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1);
@@ -261,14 +285,43 @@ function renderLearnPanel(){
 
       <div class="sectionTitle">Classroom investigations</div>
       <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
-      <div class="learnCard">
-        <div class="scenarioToolbar learnActions">
-          <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
-          <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
-          <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
+      <div class="learnCard investigationCard">
+        <div class="investigationCard__top">
+          <div>
+            <div class="investigationCard__tag">IBDP 5.2 / 5.3 • AD/AS evaluation</div>
+            <div class="investigationCard__note">Refresh to craft prompts tied to the same curves students just explored.</div>
+          </div>
+          <div class="scenarioToolbar learnActions">
+            <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
+            <button id="btnAssignStarter" class="btn btn--ghost">Assign random starter state</button>
+            <button id="btnCopyInvestigation" class="btn btn--ghost">Copy brief</button>
+          </div>
         </div>
-        <textarea id="learnInvestigationText" class="textInput learnTextarea" rows="7" aria-label="Classroom investigation brief"></textarea>
-        <div class="policy__text">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
+        <div class="investigationCard__grid">
+          <div class="investigationCard__panel">
+            <div class="investigationCard__panelTitle">Scenario prompt</div>
+            <div id="investigationScenario" class="investigationCard__panelBody"></div>
+          </div>
+          <div class="investigationCard__panel">
+            <div class="investigationCard__panelTitle">Policy lens</div>
+            <div id="investigationPolicy" class="investigationCard__panelBody"></div>
+          </div>
+          <div class="investigationCard__panel">
+            <div class="investigationCard__panelTitle">Model snapshot</div>
+            <ul id="investigationSnapshot" class="investigationCard__panelList"></ul>
+          </div>
+          <div class="investigationCard__panel">
+            <div class="investigationCard__panelTitle">Investigation steps</div>
+            <ol id="investigationSteps" class="investigationCard__panelList investigationCard__stepsList"></ol>
+          </div>
+          <div class="investigationCard__panel">
+            <div class="investigationCard__panelTitle">Deliverables</div>
+            <ul id="investigationDeliverables" class="investigationCard__panelList"></ul>
+            <div id="investigationReference" class="investigationCard__reference"></div>
+          </div>
+        </div>
+        <textarea id="learnInvestigationText" class="textInput learnTextarea investigationCard__textarea" rows="7" aria-label="Classroom investigation brief"></textarea>
+        <div class="policy__text investigationCard__cta">Teacher move: ask students to annotate <b>which curve shifts</b>, mark new equilibrium, and evaluate one limitation.</div>
       </div>
 
       <div class="learnCard" id="learnSnapshot" aria-live="polite" aria-atomic="true"></div>
@@ -365,7 +418,16 @@ function renderLearnPanel(){
 
       <div class="sectionTitle">IB Macro glossary</div>
       <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
-      ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div></div>`).join('')}
+      ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div>${VIDEO_CONCEPTS.has(g.term)?'<div class="sectionHint" style="margin-top:4px;">🎥 Video lesson coming soon</div>':''}</div>`).join('')}
+      
+      <div class="sectionTitle">Video Explanations</div>
+      <div class="learnCard">
+        <div class="policy__name">Coming in v2.0</div>
+        <div class="policy__text">Interactive video lessons linked to each concept. Watch, pause, and interact with the diagrams.</div>
+        <div style="margin-top:12px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+          ${Array.from(VIDEO_CONCEPTS).slice(0,4).map(c=>`<div class="learnCard" style="padding:8px;"><span style="opacity:0.5">🎥</span> ${escapeHtml(c)}</div>`).join('')}
+        </div>
+      </div>
 
       <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
       <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
@@ -382,10 +444,16 @@ function renderLearnPanel(){
   });
   if(learnNavButtons[0]) learnNavButtons[0].classList.add('learnNav__button--active');
   const txt=qs('#learnInvestigationText');
-  txt.value=buildInvestigationBrief();
-  qs('#btnGenerateInvestigation').onclick=()=>{txt.value=buildInvestigationBrief();};
+  const applyInvestigation=inv=>{
+    if(txt) txt.value=inv.text;
+    renderInvestigationDetails(inv);
+  };
+  applyInvestigation(buildInvestigationBrief());
+  const btnGenerate=qs('#btnGenerateInvestigation');
+  if(btnGenerate) btnGenerate.onclick=()=>applyInvestigation(buildInvestigationBrief());
   qs('#btnAssignStarter').onclick=()=>{const pick=policyCards[Math.floor(Math.random()*policyCards.length)]; state.params=pick.apply(deepCopy(defaults.params)); onParamsChanged(true); setTab('policies');};
-  qs('#btnCopyInvestigation').onclick=async()=>{await navigator.clipboard?.writeText(txt.value); qs('#btnCopyInvestigation').textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
+  const btnCopy=qs('#btnCopyInvestigation');
+  if(btnCopy) btnCopy.onclick=async()=>{await navigator.clipboard?.writeText(txt?.value||''); btnCopy.textContent='Copied ✓'; setTimeout(()=>{const b=qs('#btnCopyInvestigation'); if(b)b.textContent='Copy brief';},1200);};
   qs('#btnPcMode').onclick=()=>{phillipsState.mode=phillipsState.mode==='srpc'?'lrpc':'srpc'; renderPhillipsCurve();};
   qs('#btnPcShockLeft').onclick=()=>{phillipsState.shift=shiftCurve(phillipsState.shift,-1); renderPhillipsCurve();};
   qs('#btnPcShockRight').onclick=()=>{phillipsState.shift=shiftCurve(phillipsState.shift,1); renderPhillipsCurve();};
@@ -433,30 +501,67 @@ function buildInvestigationBrief(){
   const gapLabel=outputGap>0 ? 'inflationary gap' : outputGap<0 ? 'recessionary gap' : 'balanced gap';
   const adDescriptor=cur.adShiftY>0 ? 'rightward' : cur.adShiftY<0 ? 'leftward' : 'neutral';
   const asDescriptor=cur.asShiftP>0 ? 'leftward' : cur.asShiftP<0 ? 'rightward' : 'neutral';
-  return [
+  const modelSnapshot=[
+    `Model anchor: Y = ${eq.y.toFixed(1)}, P = ${eq.p.toFixed(1)}, potential output Yf = ${cur.yFe.toFixed(1)}`,
+    `Short-run output gap: ${gapValue} (${gapLabel})`,
+    `Slider signals: AD ${adDescriptor} ${Math.abs(cur.adShiftY).toFixed(1)} units, SRAS shift ${asDescriptor} ${Math.abs(cur.asShiftP).toFixed(1)} units`
+  ];
+  const steps=[
+    'Analyse the scenario and policy lens: decide which curve moves first, name the transmission channel, and justify the direction using cause-and-effect language.',
+    'Draw and label the AD/AS diagram: show the starting point, the new curve position, and the revised short-run equilibrium (P & Y) relative to the anchor.',
+    'Explain the short-run outcome (inflation, output, employment) then contrast it with the long-run path anchored at Yf, noting any lags or confidence effects.',
+    'Evaluate trade-offs: weigh the policy objective against a clear limit (crowding out, capacity constraints, inflation expectations, or external factors) and recommend whether to augment or pause the policy.'
+  ];
+  const deliverables=[
+    'A labelled AD/AS sketch with arrows for curve shifts and annotations for price/output moves.',
+    'A four-sentence written evaluation covering short run, long run, a policy trade-off, a policy limit, and one stated assumption.',
+    'Use syllabus-aligned vocabulary (Analyse, Explain, Evaluate, Justify) and cite the dominant transmission channel.'
+  ];
+  const referenceFrame=`Current reference frame: AD shift = ${cur.adShiftY.toFixed(1)} (${adDescriptor}), AS shift = ${cur.asShiftP.toFixed(1)} (${asDescriptor})`;
+  const policyAnchor=`Use the ${policy.name} lens to anchor your policy recommendation.`;
+  const lines=[
     'Investigation brief (IB Macro — AD/AS)',
     `Scenario prompt: ${caseLine}`,
     `Assigned policy lens: ${policy.name} — ${policy.definition}`,
     '',
     'Model snapshot:',
-    `- Model anchor: Y = ${eq.y.toFixed(1)}, P = ${eq.p.toFixed(1)}, potential output Yf = ${cur.yFe.toFixed(1)}`,
-    `- Short-run output gap: ${gapValue} (${gapLabel})`,
-    `- Slider signals: AD ${adDescriptor} ${Math.abs(cur.adShiftY).toFixed(1)} units, SRAS shift ${asDescriptor} ${Math.abs(cur.asShiftP).toFixed(1)} units`,
+    ...modelSnapshot.map(line=>`- ${line}`),
     '',
     'Investigation steps (IB command terms):',
-    '1) Analyse the scenario and policy lens: decide which curve moves first, name the transmission channel, and justify the direction using cause-and-effect language.',
-    '2) Draw and label the AD/AS diagram: show the starting point, the new curve position, and the revised short-run equilibrium (P & Y) relative to the anchor.',
-    '3) Explain the short-run outcome (inflation, output, employment) then contrast it with the long-run path anchored at Yf, noting any lags or confidence effects.',
-    '4) Evaluate trade-offs: weigh the policy objective against a clear limit (crowding out, capacity constraints, inflation expectations, or external factors) and recommend whether to augment or pause the policy.',
+    ...steps.map((step,index)=>`${index+1}) ${step}`),
     '',
     'Deliverables:',
-    '- A labelled AD/AS sketch with arrows for curve shifts and annotations for price/output moves.',
-    '- A four-sentence written evaluation covering short run, long run, a policy trade-off, a policy limit, and one stated assumption.',
-    '- Use syllabus-aligned vocabulary (Analyse, Explain, Evaluate, Justify) and cite the dominant transmission channel.',
+    ...deliverables.map(item=>`- ${item}`),
     '',
-    `Current reference frame: AD shift = ${cur.adShiftY.toFixed(1)} (${adDescriptor}), AS shift = ${cur.asShiftP.toFixed(1)} (${asDescriptor})`,
-    `Use the ${policy.name} lens to anchor your policy recommendation.`
-  ].join('\n');
+    referenceFrame,
+    policyAnchor
+  ];
+  const text=lines.join('\n');
+  return {
+    text,
+    scenarioPrompt: caseLine,
+    policyLens:{name:policy.name,definition:policy.definition},
+    modelSnapshot,
+    steps,
+    deliverables,
+    referenceFrame,
+    policyAnchor
+  };
+}
+function renderInvestigationDetails(data){
+  if(!data) return;
+  const scenarioEl=qs('#investigationScenario');
+  if(scenarioEl) scenarioEl.textContent=data.scenarioPrompt;
+  const policyEl=qs('#investigationPolicy');
+  if(policyEl) policyEl.innerHTML=`<strong>${escapeHtml(data.policyLens.name)}</strong><br/>${escapeHtml(data.policyLens.definition)}`;
+  const snapshotEl=qs('#investigationSnapshot');
+  if(snapshotEl) snapshotEl.innerHTML=data.modelSnapshot.map(line=>`<li>${escapeHtml(line)}</li>`).join('');
+  const stepsEl=qs('#investigationSteps');
+  if(stepsEl) stepsEl.innerHTML=data.steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('');
+  const deliverablesEl=qs('#investigationDeliverables');
+  if(deliverablesEl) deliverablesEl.innerHTML=data.deliverables.map(item=>`<li>${escapeHtml(item)}</li>`).join('');
+  const referenceEl=qs('#investigationReference');
+  if(referenceEl) referenceEl.innerHTML=`<strong>${escapeHtml(data.referenceFrame)}</strong><br/><span>${escapeHtml(data.policyAnchor)}</span>`;
 }
 
 function updateLearnSnapshot(){
@@ -831,6 +936,96 @@ function renderAboutPanel(){
   };
   qs('#btnOpenShortcuts').onclick=openShortcuts;
 }
+
+// Teacher Dashboard MVP - Basic teacher view for monitoring student progress
+const TEACHER_STORAGE_KEY = 'macrow_teacher_data_v1';
+function loadTeacherData(){
+  try{return JSON.parse(localStorage.getItem(TEACHER_STORAGE_KEY)||'{}');}catch{return {};}
+}
+function saveTeacherData(data){localStorage.setItem(TEACHER_STORAGE_KEY,JSON.stringify(data));}
+
+function renderTeacherPanel(){
+  const root=qs('#panelTeacher');
+  const teacherData=loadTeacherData();
+  const students=teacherData.students||[];
+  const assignedScenarios=teacherData.assignedScenarios||[];
+  
+  // Mock student data if none exists
+  const displayStudents=students.length?students:[
+    {id:'s1',name:'Alex',lastActive:Date.now()-3600000,progress:75,assessScore:82},
+    {id:'s2',name:'Jordan',lastActive:Date.now()-7200000,progress:45,assessScore:68},
+    {id:'s3',name:'Taylor',lastActive:Date.now()-86400000,progress:90,assessScore:95},
+  ];
+  
+  const now=Date.now();
+  const fmtTime=ts=>{const diff=now-ts; if(diff<3600000)return'M'+Math.round(diff/60000); if(diff<86400000)return'H'+Math.round(diff/3600000); return'D'+Math.round(diff/86400000);};
+  
+  root.innerHTML=`
+    <div class="sectionTitle">Teacher Dashboard</div>
+    <div class="sectionHint">Monitor student progress and assign scenarios (MVP - localStorage only)</div>
+    
+    <div class="learnCard">
+      <div class="policy__name">Class Overview</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${displayStudents.length}</div><div class="sectionHint">Students</div></div>
+        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${Math.round(displayStudents.reduce((a,s)=>a+s.progress,0)/displayStudents.length)||0}%</div><div class="sectionHint">Avg Progress</div></div>
+        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${Math.round(displayStudents.reduce((a,s)=>a+(s.assessScore||0),0)/displayStudents.length)||0}%</div><div class="sectionHint">Avg Score</div></div>
+      </div>
+    </div>
+    
+    <div class="sectionTitle">Student Progress</div>
+    ${displayStudents.map(s=>`
+      <div class="learnCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><b>${escapeHtml(s.name)}</b><div class="sectionHint">Active ${fmtTime(s.lastActive)} ago</div></div>
+          <div style="text-align:right;">
+            <div>Progress: ${s.progress||0}%</div>
+            <div>Assess: ${s.assessScore||'—'}%</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;"><div style="background:rgba(59,130,246,0.8);height:100%;border-radius:3px;width:${s.progress||0}%"></div></div>
+      </div>
+    `).join('')}
+    
+    <div class="sectionTitle">Assign Scenarios</div>
+    <div class="learnCard">
+      <div class="policy__name">Create Assignment</div>
+      <div class="scenarioToolbar" style="margin-top:8px;flex-wrap:wrap;">
+        <select id="teacherScenarioSelect" class="textInput" aria-label="Select scenario">
+          <option value="">— Select a scenario -</option>
+          <option value="recession">Recessionary Gap</option>
+          <option value="inflation">Demand-Pull Inflation</option>
+          <option value="costpush">Cost-Push Inflation</option>
+          <option value="growth">Long-run Growth</option>
+        </select>
+        <button id="btnAssignScenario" class="btn btn--primary">Assign to Class</button>
+      </div>
+      <div id="teacherAssignedList" class="sectionHint" style="margin-top:12px;">
+        ${assignedScenarios.length?assignedScenarios.map(a=>`<div>📌 ${escapeHtml(a.scenario)} - Assigned ${fmtTime(a.assignedAt)} ago</div>`).join(''):'No assignments yet.'}
+      </div>
+    </div>
+    
+    <div class="learnCard">
+      <div class="policy__name">Teacher Tips</div>
+      <div class="policy__text">
+        • Use the <b>Scenarios</b> tab to create custom problems<br>
+        • Students can share their scenario URL with you<br>
+        • Track assess mode scores for formative data
+      </div>
+    </div>
+  `;
+  
+  qs('#btnAssignScenario').onclick=()=>{
+    const select=qs('#teacherScenarioSelect');
+    const scenario=select.value;
+    if(!scenario) return;
+    const data=loadTeacherData();
+    data.assignedScenarios=data.assignedScenarios||[];
+    data.assignedScenarios.unshift({scenario:select.options[select.selectedIndex].text,assignedAt:Date.now()});
+    saveTeacherData(data);
+    renderTeacherPanel();
+  };
+}
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
 
 qs('#btnReset').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
@@ -852,6 +1047,7 @@ function onParamsChanged(pushHistory=false){
   syncParamReadouts();
   updateLearnSnapshot();
   queueRender();
+  syncStateToUrl();
   const sharePanel=qs('#sharePanel');
   if(sharePanel && !sharePanel.classList.contains('hidden')) refreshShareLinkPreview();
   if(pushHistory) pushPolicyHistory();
@@ -1056,6 +1252,36 @@ function buildScenarioURL(s){
   const payload={name:s.name,params:s.params,category:s.category};
   return `${location.origin}${location.pathname}?scenario=${encodeURIComponent(encodeScenario(payload))}`;
 }
+function buildStateURLFromParams(params){
+  const url=new URL(`${location.origin}${location.pathname}`);
+  Object.entries(URL_STATE_PARAM_MAP).forEach(([key,shortKey])=>{
+    const value=params?.[key];
+    if(Number.isFinite(value)) url.searchParams.set(shortKey,String(value));
+  });
+  return url.toString();
+}
+let urlSyncTimer=null;
+function syncStateToUrl(){
+  if(urlSyncTimer) clearTimeout(urlSyncTimer);
+  urlSyncTimer=setTimeout(()=>{
+    const next=buildStateURLFromParams(state.params);
+    history.replaceState(null,'',next);
+  },120);
+}
+function applyStateParamsFromUrl(){
+  const sp=new URLSearchParams(location.search);
+  let hasAny=false;
+  const next={...state.params};
+  Object.entries(URL_STATE_PARAM_MAP).forEach(([key,shortKey])=>{
+    const raw=sp.get(shortKey);
+    if(raw==null) return;
+    const val=Number(raw);
+    if(!Number.isFinite(val)) return;
+    hasAny=true;
+    next[key]=val;
+  });
+  if(hasAny) state.params={...defaults.params,...next};
+}
 function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
@@ -1074,16 +1300,16 @@ function getScenarioForShare(){
 function refreshShareLinkPreview(){
   const preview=qs('#shareLinkPreview');
   if(!preview) return;
-  const link=buildScenarioURL(getScenarioForShare());
+  const link=buildStateURLFromParams(state.params);
   preview.textContent=link;
   preview.classList.remove('hidden');
 }
 
 async function copyScenarioShareLink(){
-  const link=buildScenarioURL(getScenarioForShare());
+  const link=buildStateURLFromParams(state.params);
   try{
     await navigator.clipboard?.writeText(link);
-    showStatus('Scenario share link copied!');
+    showStatus('Scenario state link copied!');
   }catch{
     prompt('Copy scenario URL:',link);
   }
@@ -1189,9 +1415,18 @@ function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin
 
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q'&&settings.assessEnabled)setTab('assess'); if(e.key==='a')setTab('about'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q'&&settings.assessEnabled)setTab('assess'); if(e.key==='a')setTab('about'); if(e.key==='t')setTab('teacher'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
 
-function applyScenarioFromUrl(){const s=new URLSearchParams(location.search).get('scenario'); if(s){try{const obj=decodeScenario(decodeURIComponent(s)); if(obj.params){state.params={...state.params,...obj.params};}}catch{}}}
+function applyScenarioFromUrl(){
+  applyStateParamsFromUrl();
+  const s=new URLSearchParams(location.search).get('scenario');
+  if(s){
+    try{
+      const obj=decodeScenario(decodeURIComponent(s));
+      if(obj.params){state.params={...state.params,...obj.params};}
+    }catch{}
+  }
+}
 
 function getSvgExportDimensions(svg, overrides={}) {
   const viewBox = svg?.viewBox?.baseVal;
@@ -1293,7 +1528,54 @@ function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),axisY=y(G
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){const k='macrow_welcome_dismissed_v6'; if(localStorage.getItem(k)==='1')return; const ov=qs('#welcomeOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); const close=(save=false)=>{if(save||qs('#welcomeDontShow').checked)localStorage.setItem(k,'1'); ov.classList.add('hidden'); ov.setAttribute('aria-hidden','true'); document.removeEventListener('keydown',escHandler);}; const escHandler=e=>{if(e.key==='Escape')close(false);}; document.addEventListener('keydown',escHandler); qs('#welcomeClose').onclick=()=>close(false); qs('#welcomeOk').onclick=()=>close(true);}
+function showWelcomeIfNeeded(){
+  const k='macrow_welcome_dismissed_v7';
+  if(localStorage.getItem(k)==='1') return;
+  const ov=qs('#welcomeOverlay');
+  const intro=ov?.querySelector('.welcomeIntro');
+  const grid=ov?.querySelector('.welcomeGrid');
+  const okBtn=qs('#welcomeOk');
+  const closeBtn=qs('#welcomeClose');
+  if(!ov||!intro||!grid||!okBtn||!closeBtn) return;
+
+  const steps=[
+    {title:'Welcome to macrow',body:'Quick guided tour: we will show where to run scenarios, apply policy shifts, and use sliders.',target:null},
+    {title:'Step 1: Graph area',body:'This is your AD-AS canvas. Watch equilibrium output (Y) and price level (P) update live as you change policy.',target:'.chartCard'},
+    {title:'Step 2: Policy cards',body:'Use quick policy cards to simulate recession, demand-pull, and cost-push scenarios in one tap.',target:'#panelPolicies'},
+    {title:'Step 3: Parameters',body:'Open Parameters tab to fine-tune gov spending, tax, rates, costs, productivity, and reform assumptions.',target:'[data-tab="parameters"]'},
+    {title:'Step 4: Scenario sharing',body:'Use Share this scenario to copy a state link or QR code so others load the exact same setup.',target:'#btnOpenSharePanel'}
+  ];
+  let i=0;
+
+  const clearSpotlight=()=>qsa('.tour-spotlight').forEach(el=>el.classList.remove('tour-spotlight'));
+  const render=()=>{
+    const step=steps[i];
+    intro.innerHTML=`<b>${escapeHtml(step.title)}</b><div style="margin-top:6px;">${escapeHtml(step.body)}</div>`;
+    grid.innerHTML=`<article class="welcomeCard"><h3>Tour progress</h3><p>Step ${i+1} of ${steps.length}</p></article>`;
+    clearSpotlight();
+    if(step.target){
+      const target=qs(step.target);
+      if(target){target.classList.add('tour-spotlight'); target.scrollIntoView({behavior:'smooth',block:'center'});} 
+    }
+    okBtn.textContent=i===steps.length-1?'Finish tour':'Next';
+  };
+
+  const close=(save=false)=>{
+    if(save||qs('#welcomeDontShow')?.checked) localStorage.setItem(k,'1');
+    clearSpotlight();
+    ov.classList.add('hidden');
+    ov.setAttribute('aria-hidden','true');
+    document.removeEventListener('keydown',escHandler);
+  };
+  const escHandler=e=>{if(e.key==='Escape')close(false);};
+
+  ov.classList.remove('hidden');
+  ov.setAttribute('aria-hidden','false');
+  document.addEventListener('keydown',escHandler);
+  closeBtn.onclick=()=>close(false);
+  okBtn.onclick=()=>{if(i<steps.length-1){i+=1; render();}else close(true);};
+  render();
+}
 
 function initResilience(){
   window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
@@ -1317,12 +1599,13 @@ function initPerformanceMonitoring(){
 function init(){
   initResilience();
   initPerformanceMonitoring();
+  initThemeToggle();
   document.body.classList.toggle('accessibility-mode',settings.accessibility);
   renderPoliciesPanel();
   renderParametersPanel();
-  renderLearnPanel();
   renderAssessPanel();
   renderAboutPanel();
+  renderTeacherPanel();
   initScenarioManager();
   initShareTools();
   syncAssessAvailability();
