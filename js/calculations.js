@@ -9,8 +9,9 @@ export function computeFromParams(p){
   const adShiftY=clamp(g+t+i,-60,60);
   const supplyBoost=(p.supplySideReform-50)*0.3;
   const asShiftP=clamp((p.productionCosts-50)*0.6 - supplyBoost,-22,22);
-  const yFe=clamp(GRAPH.yFeBase + (p.productivity-50)+(p.supplySideReform-50)*0.5,70,160);
-  return {adShiftY,asShiftP,yFe};
+  const horizontalShift=clamp((p.productionCosts-50)*0.9 - supplyBoost,-30,30);
+  const yFe=clamp(GRAPH.yFeBase + (p.productivity-50)+(p.supplySideReform-50)*0.5 - horizontalShift,70,160);
+  return {adShiftY,asShiftP,yFe,asShiftY:horizontalShift};
 }
 
 export const AD=(Y,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return GRAPH.adIntercept-GRAPH.adSlope*(Y-Y0)};

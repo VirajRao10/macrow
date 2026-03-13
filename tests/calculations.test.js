@@ -22,12 +22,12 @@ describe('economic calculations', () => {
     expect(costPush.asShiftP).toBeGreaterThan(base.asShiftP);
   });
 
-  it('cost-push shock shifts AS upward without moving potential output anchor', () => {
+  it('cost-push shock shifts AS upward and contracts potential output', () => {
     const base = ASshape(computeFromParams(defaults.params));
     const costPush = ASshape(computeFromParams({ ...defaults.params, productionCosts: 90 }));
     expect(costPush.pFlat).toBeGreaterThan(base.pFlat);
     expect(costPush.pEnd).toBeGreaterThan(base.pEnd);
-    expect(costPush.yFe).toBeCloseTo(base.yFe, 6);
+    expect(costPush.yFe).toBeLessThan(base.yFe);
   });
 
   it('AS right kink (Yf marker point) remains to the right and above the flat segment kink', () => {

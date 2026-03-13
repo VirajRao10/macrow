@@ -1,46 +1,79 @@
 import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment } from './js/calculations.js';
 import { loadProgress, saveProgress } from './js/storage.js';
 import { buildQuizQuestions, buildPracticeFromConcepts } from './js/assessments.js';
+import { LEARN_TOPIC_PRACTICE, evaluatePracticeAnswer, computePracticeScore } from './js/learn-practice.js';
+import { summarizeTeacherAnalytics } from './js/teacher-analytics.js';
+import { normalizeScenarios, addCommentToScenario, formatCommentTimestamp } from './js/scenario-comments.js';
+import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-share.js';
+import { authenticateUser, registerUser, getActiveUser, setActiveUser, clearActiveUser } from './js/auth.js';
+import { storageGet, storageSet } from './js/local-storage.js';
 
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));
 const GRAPH=C_GRAPH; const defaults=C_DEFAULTS;
 const qs=s=>document.querySelector(s), qsa=s=>Array.from(document.querySelectorAll(s)); const deepCopy=x=>JSON.parse(JSON.stringify(x));
+const RESILIENCE_ERROR_DELAY_MS=1200;
+const scriptStartTime=Date.now();
+let hasRenderedChart=false;
+
+function shouldReportResilienceError(){
+  return hasRenderedChart||Date.now()-scriptStartTime>RESILIENCE_ERROR_DELAY_MS;
+}
+
+function markChartRendered(){
+  hasRenderedChart=true;
+}
+
+function onDocumentReady(callback){
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',callback,{once:true});
+  } else {
+    callback();
+  }
+}
+
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
 const THEME_STORAGE_KEY="macrow_theme_mode_v1";
 const ThemeMode={DARK:"dark",LIGHT:"light"};
 let currentTheme=ThemeMode.DARK;
 function detectSystemPrefersDark(){return typeof window!="undefined"&&typeof window.matchMedia==="function"&&window.matchMedia("(prefers-color-scheme: dark)").matches;}
-function getPreferredTheme(){const stored=localStorage.getItem(THEME_STORAGE_KEY);if(stored===ThemeMode.LIGHT||stored===ThemeMode.DARK)return stored;return detectSystemPrefersDark()?ThemeMode.DARK:ThemeMode.LIGHT;}
-function applyTheme(theme,{persist=true}={}){const nextTheme=theme===ThemeMode.LIGHT?ThemeMode.LIGHT:ThemeMode.DARK;currentTheme=nextTheme;const body=document.body;if(body)body.dataset.theme=nextTheme;if(persist)localStorage.setItem(THEME_STORAGE_KEY,nextTheme);updateThemeToggleUI();}
+function getPreferredTheme(){const stored=storageGet(THEME_STORAGE_KEY);if(stored===ThemeMode.LIGHT||stored===ThemeMode.DARK)return stored;return detectSystemPrefersDark()?ThemeMode.DARK:ThemeMode.LIGHT;}
+function applyTheme(theme,{persist=true}={}){const nextTheme=theme===ThemeMode.LIGHT?ThemeMode.LIGHT:ThemeMode.DARK;currentTheme=nextTheme;const body=document.body;if(body)body.dataset.theme=nextTheme;if(persist)storageSet(THEME_STORAGE_KEY,nextTheme);updateThemeToggleUI();}
 function updateThemeToggleUI(){const toggle=qs("#themeToggle");if(!toggle)return;const isDark=currentTheme===ThemeMode.DARK;toggle.setAttribute("aria-pressed",isDark?"true":"false");toggle.setAttribute("aria-label",isDark?"Switch to light mode":"Switch to dark mode");const icon=toggle.querySelector(".themeToggle__icon");const label=toggle.querySelector(".themeToggle__label");if(icon)icon.textContent=isDark?"🌙":"☀️";if(label)label.textContent=isDark?"Dark theme":"Light theme";}
 function initThemeToggle(){const toggle=qs("#themeToggle");if(!toggle)return;toggle.addEventListener("click",()=>{const next=currentTheme===ThemeMode.DARK?ThemeMode.LIGHT:ThemeMode.DARK;applyTheme(next);});updateThemeToggleUI();}
 applyTheme(getPreferredTheme(),{persist:false});
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const FLASHCARD_STORAGE_KEY="macrow_flashcards_srs_v1";
+const scenarioFilterState={favoritesOnly:false};
 const URL_STATE_PARAM_MAP={govSpending:'gov',taxRate:'tax',interestRate:'interest',productionCosts:'cost',productivity:'prod',supplySideReform:'reform'};
 const KEYBOARD_SHORTCUTS=[
   {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
-  "AD shifts right typically raise real output and the price level in the short run.",
-  "AS shifts left (cost-push shock) create inflation with weaker growth.",
-  "Yf now anchors at the AS right-kink point (where SRAS meets vertical LRAS).",
+  "When AD shifts right, it typically raises real output and the price level in the short run.",
+  "AS shifts left (cost-push shock) creates inflation with weaker growth.",
+  "Yf now anchors at the AS right-kink point (where SRAS meets the vertical LRAS).",
   "Use evaluation language: short run vs long run, inflation vs unemployment, and policy trade-offs.",
   "For top-band answers, add assumptions (confidence, spare capacity, policy lag, external shocks)."
 ];
 const LEARN_NAV_LINKS=[
   {label:'Guidance',target:'learnGuidance'},
   {label:'Labs',target:'learnLabs'},
-  {label:'Resources',target:'learnResources'}
+  {label:'Resources',target:'learnResources'},
+  {label:'AI scenarios',target:'learnAi'}
 ];
 const LEARN_MODULES=[
   {title:"AD–AS exam roadmap",points:["Start with the initial equilibrium (Y and P).","State the curve shift direction and why it shifts.","Explain the new short-run equilibrium outcome.","Evaluate short-run gains vs long-run risks."]},
   {title:"Policy evaluation structure (IB-ready)",points:["Define the policy objective (growth, inflation, unemployment, external balance).","Use AD/AS mechanics to explain likely transmission.","Add at least one time lag or confidence effect.","Conclude with conditions when policy is most effective."]},
   {title:"Classroom investigation template",points:["Set a starting state and ask students to predict P/Y before moving any slider.","Apply one policy, then require annotation of what shifted and why.","Compare short-run gains against inflation or unemployment trade-offs.","Finish with a 2–3 sentence evaluation using assumptions and limits."]},
-  {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]}
+  {title:"Common command terms",points:["Explain: show clear cause-and-effect steps.","Discuss: present advantages + limitations.","Evaluate: weigh trade-offs and end with justified judgement.","To what extent: compare alternatives before concluding."]},
+  {title:"Phillips curve analysis",points:["Start by identifying whether movement is along SRPC or a shift of SRPC.","Link unemployment changes to inflation pressure using labour-market tightness.","Use expectations to explain why SRPC can shift after persistent inflation.","Evaluate policy trade-offs: inflation control vs short-run employment costs."]},
+  {title:"Money market transmission",points:["Show how demand for money or money supply shifts the equilibrium interest rate.","Connect interest-rate changes to investment and aggregate demand.","Distinguish temporary liquidity effects from medium-run inflation expectations.","Comment on central bank credibility when discussing policy effectiveness."]},
+  {title:"External sector & exchange rates",points:["Explain how appreciation/depreciation affects net exports and AD.","Add an inflation channel through imported input costs.","Use Marshall–Lerner/J-curve ideas for short-run vs long-run evaluation.","Conclude with impacts on growth, inflation, and external balance together."]},
+  {title:"Balance of payments diagnosis",points:["Separate current account and financial account developments before judging policy.","Identify whether imbalances are cyclical (demand) or structural (competitiveness).","Match fiscal, monetary, and supply-side tools to the diagnosed cause.","Evaluate trade-offs including exchange-rate pressure and debt sustainability."]},
+  {title:"Monetary policy transmission deep-dive",points:["Start with the policy-rate change and identify the first transmission channel (credit, confidence, or exchange rate).","Trace second-round effects on consumption, investment, and net exports before concluding on AD.","Discuss when transmission weakens (liquidity traps, fragile banks, or pessimistic expectations).","Evaluate inflation and growth outcomes across short run vs medium run with explicit assumptions."]}
 ];
 // Video explanation placeholders - concepts that will have video lessons in v2.0
 const VIDEO_CONCEPTS=new Set([
@@ -48,6 +81,79 @@ const VIDEO_CONCEPTS=new Set([
   "Recessionary gap","Inflationary gap","Demand-pull inflation","Cost-push inflation",
   "Multiplier effect","Crowding out","Supply-side policy"
 ]);
+const PARAM_LABELS={
+  govSpending:'Gov spending',
+  taxRate:'Tax rate',
+  interestRate:'Interest rate',
+  productionCosts:'Production costs',
+  productivity:'Productivity',
+  supplySideReform:'Supply-side intensity'
+};
+const PARAM_FORMATTERS={
+  taxRate:v=>`${Number(v).toFixed(0)}%`,
+  interestRate:v=>`${Number(v).toFixed(1)}%`
+};
+const formatParamValue=(key,value)=>{
+  if(PARAM_FORMATTERS[key]) return PARAM_FORMATTERS[key](value);
+  const numeric=Number(value);
+  if(Number.isFinite(numeric)) return Number.isInteger(numeric)?String(numeric):numeric.toFixed(1);
+  return String(value);
+};
+const AI_SCENARIO_SUGGESTIONS=[
+  {
+    id:'stagflation-watch',
+    title:'2026 stagflation watch',
+    focus:'Cost-push inflation and credibility trade-offs',
+    description:'Raise input costs while policy credibility matters, then ask students to compare supply-side fixes with short-run stabilisation.',
+    prompt:'AI prompt: “Explain how a 2026 cost-push shock with sticky wages raises inflation while output slips, and identify supply-side reforms that can restore potential output without reigniting inflation expectations.”',
+    steps:[
+      'Increase production costs to lock in a leftward SRAS shock.',
+      'Keep supply-side reform and productivity low so LRAS stays inelastic.',
+      'Hold interest rates higher to show central-bank credibility pressure on inflation.'
+    ],
+    params:{govSpending:48,taxRate:38,interestRate:7.5,productionCosts:82,productivity:42,supplySideReform:18}
+  },
+  {
+    id:'supply-growth-lift',
+    title:'Supply-side growth lift',
+    focus:'Productivity gains with calibrated demand',
+    description:'Show how structural reform and selective spending expand potential output without overheating inflation.',
+    prompt:'AI prompt: “List how targeted supply-side reforms plus measured spending can shift LRAS right, keeping inflation anchored while AD increments carefully.”',
+    steps:[
+      'Boost supply-side reform intensity to signal structural upgrades.',
+      'Raise productivity to push potential output higher.',
+      'Pair with moderate government spending so AD grows without overheating.'
+    ],
+    params:{govSpending:38,taxRate:30,interestRate:3.6,productionCosts:42,productivity:74,supplySideReform:65}
+  },
+  {
+    id:'global-tightening',
+    title:'Global tightening pause',
+    focus:'High rates and fiscal restraint',
+    description:'Model a high-rate environment where demand cools while governments keep deficits in check and guide students through export effects.',
+    prompt:'AI prompt: “Describe a scenario where global tightening pushes policy rates up, slowing demand but leaving potential output intact, and highlight risks for net exports and debt service.”',
+    steps:[
+      'Set interest rates near the top of the range to dampen AD.',
+      'Raise tax rates modestly to offset inflation without cutting supply.',
+      'Keep productivity and supply-side reform steady to keep LRAS stable while AD adjusts.'
+    ],
+    params:{govSpending:34,taxRate:34,interestRate:8.8,productionCosts:56,productivity:48,supplySideReform:24}
+  }
+];
+
+const TOTAL_PRACTICE_QUESTIONS=LEARN_TOPIC_PRACTICE.reduce((sum,topic)=>sum+topic.questions.length,0);
+const PRACTICE_QUESTION_LOOKUP=new Map();
+LEARN_TOPIC_PRACTICE.forEach(topic=>{
+  topic.questions.forEach(question=>PRACTICE_QUESTION_LOOKUP.set(question.id,question));
+});
+const WORKSHEET_DEFAULT_INSTRUCTIONS='Answer each question using IB command terms, name the curve shifts, and justify the short-run vs long-run outcomes.';
+const worksheetState={topicId:LEARN_TOPIC_PRACTICE[0]?LEARN_TOPIC_PRACTICE[0].id:'',instructions:WORKSHEET_DEFAULT_INSTRUCTIONS,includeAnswers:false};
+
+function getWorksheetTopic(){
+  return LEARN_TOPIC_PRACTICE.find(topic=>topic.id===worksheetState.topicId)||LEARN_TOPIC_PRACTICE[0]||{title:'Learn worksheet',summary:'',questions:[]};
+}
+
+
 const CLASSROOM_INVESTIGATIONS=[
   "A central bank is worried about persistent inflation and weak credibility.",
   "Consumer confidence has fallen after external uncertainty, reducing private spending.",
@@ -55,6 +161,77 @@ const CLASSROOM_INVESTIGATIONS=[
   "Energy and shipping costs surge, pushing up firms’ production costs.",
   "A productivity boom follows digital adoption and labour upskilling.",
   "A tax increase is introduced to reduce a widening budget deficit."
+];
+
+const LESSON_PLANS=[
+  {
+    id:'recessionary-gap',
+    title:'Recessionary gap investigation',
+    focus:'Diagnose AD shortfalls and weigh fiscal vs monetary responses.',
+    duration:'20-25 min classwork',
+    profile:'preset_recession',
+    objective:'Help learners articulate what causes a recessionary gap and how policy tools trade off short-run output and price impacts.',
+    steps:[
+      'Start with the baseline equilibrium and calculate the recessionary gap relative to Yf.',
+      'Apply fiscal expansion (AD right shift) and compare the price vs output response with a monetary expansion.',
+      'Ask students to evaluate which tool is better when spare capacity exists versus when inflation expectations are rising.'
+    ],
+    resources:[
+      'Exit ticket prompt: “Which policy has the stronger multiplier and why?”',
+      'Share this scenario link with students for homework analysis.'
+    ]
+  },
+  {
+    id:'demand-pull-inflation',
+    title:'Demand-pull inflation simulation',
+    focus:'Trace overheating economies and practice evaluation language.',
+    duration:'15 min warm-up',
+    profile:'preset_inflation',
+    objective:'Reinforce how strong AD pushes up both prices and output before comparing contractionary policies.',
+    steps:[
+      'Load the demand-pull preset and annotate how AD moves relative to potential output.',
+      'Test fiscal tightening vs interest-rate hikes to show how each cools demand.',
+      'Have each student write a “Discuss” response comparing the lagged effects of each policy.'
+    ],
+    resources:[
+      'Mini-quiz question: “Why does Y rise faster than P when AD shifts?”',
+      'Teacher note: Tie outcomes to real-world central bank panic decisions.'
+    ]
+  },
+  {
+    id:'cost-push-stagflation',
+    title:'Cost-push stagflation lab',
+    focus:'Explore AS left shifts and the policy dilemma they create.',
+    duration:'15 min scenario lab',
+    profile:'cost_push',
+    objective:'Expose students to stagflation and why supply-side policy or targeted support is preferable.',
+    steps:[
+      'Load the cost-push preset and highlight why output falls while prices rise.',
+      'Discuss why demand-side tools struggle when AS is shifting left.',
+      'Invite students to propose supply-side or productivity responses that move LRAS right.'
+    ],
+    resources:[
+      'Reflection prompt: “Why is stagflation harder to solve than pure demand-pull inflation?”',
+      'Shareable QR code bundle explaining cost pressures in the short run.'
+    ]
+  },
+  {
+    id:'supply-side-growth',
+    title:'Supply-side growth workshop',
+    focus:'Use AS/LRAS shifts to highlight long-run prosperity goals.',
+    duration:'20 min group activity',
+    profile:'preset_growth',
+    objective:'Show how productivity boosts shift potential output and how policy choices align with development goals.',
+    steps:[
+      'Start with the growth preset and note how LRAS and AS both move right.',
+      'Compare the immediate price/output effects with a pure AD-driven expansion.',
+      'Ask students to design a supply-side policy package that preserves price stability.'
+    ],
+    resources:[
+      'Student worksheet: “Name 3 real-world supply-side reforms and their expected curves.”',
+      'Share scenario link + QR for remote learners.'
+    ]
+  }
 ];
 
 const PARAM_LIMITS = {
@@ -171,6 +348,15 @@ const PRESET_PROFILE_IDS={
   growth:'preset_growth'
 };
 
+const ECONOMIC_INDICATOR_REFERENCE=[
+  {name:"Real GDP growth",why:"Tracks whether the economy is expanding or slowing.",examUse:"Use with output gap and unemployment to justify AD-side policy choices."},
+  {name:"CPI inflation",why:"Shows the pace of price-level increases.",examUse:"Distinguish demand-pull vs cost-push pressures before choosing policy."},
+  {name:"Unemployment rate",why:"Signals labour-market slack and cyclical weakness.",examUse:"Link to recessionary gaps and Phillips-curve trade-offs."},
+  {name:"Policy interest rate",why:"Core monetary-policy stance set by the central bank.",examUse:"Trace transmission to borrowing, investment, AD, and inflation."},
+  {name:"Current account balance",why:"Indicates external demand strength and competitiveness.",examUse:"Evaluate exchange-rate effects and external-balance objectives."},
+  {name:"Government budget balance",why:"Shows fiscal position and room for discretionary policy.",examUse:"Discuss sustainability, crowding-out risk, and fiscal trade-offs."}
+];
+
 const GLOSSARY=[
   {term:"Aggregate Demand (AD)",blurb:"Total planned spending at each price level: C + I + G + (X − M). AD shifts right when spending conditions improve."},
   {term:"Aggregate Supply (AS)",blurb:"Short-run total output producers are willing to supply. It can shift left after cost shocks and right after cost reductions."},
@@ -195,15 +381,29 @@ const GLOSSARY=[
 ];
 
 const settings={
-  showAxisNumbers:(localStorage.getItem("macrow_show_axis_numbers")??"1")==="1",
-  accessibility:(localStorage.getItem("macrow_access")??"0")==="1",
-  assessEnabled:(localStorage.getItem("macrow_assess_enabled")??"0")==="1"
+  showAxisNumbers:(storageGet("macrow_show_axis_numbers","1"))==="1",
+  accessibility:(storageGet("macrow_access","0"))==="1",
+  assessEnabled:(storageGet("macrow_assess_enabled","0"))==="1"
 };
-let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null}};
-let scenarios=JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY)||"[]");
+let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null},activeScenarioId:null};
+let scenarios=[];
+let scenarioComparisonController = null;
+try {
+  const savedScenarios = storageGet(SCENARIO_STORAGE_KEY);
+  scenarios = normalizeScenarios(JSON.parse(savedScenarios||"[]"), defaults.params);
+} catch (err) {
+  console.warn('Unable to parse saved scenarios, starting fresh.', err);
+  scenarios = [];
+}
 let progress=loadProgress();
+progress.learnPracticeAttempts=progress.learnPracticeAttempts||[];
+progress.learnTopicQuizzes=progress.learnTopicQuizzes||{};
+progress.quizAttempts=progress.quizAttempts||[];
+progress.competencies=progress.competencies||{};
 let flashcardProgress=loadFlashcardProgress();
 let learnPanelRendered=false;
+let currentUser=getActiveUser();
+const topicQuizState={topicId:null,questionIndex:0,answers:[],feedback:null,completed:false,summary:null};
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
 const MONEY_MARKET_CONFIG={
@@ -217,27 +417,199 @@ const MONEY_MARKET_CONFIG={
   msShiftInterestImpact:0.55,
   interestBounds:[1.2,10.8]
 };
+const loanableFundsState={demandShift:0,supplyShift:0,policyRate:4.0};
+const LOANABLE_FUNDS_CONFIG={
+  baseRate:4.0,
+  baseFunds:95,
+  qBounds:[45,150],
+  qRange:[35,165],
+  demandSlope:-0.045,
+  supplySlope:0.045,
+  demandShiftFundsImpact:8,
+  supplyShiftFundsImpact:7,
+  demandShiftRateImpact:0.5,
+  supplyShiftRateImpact:0.55,
+  rateBounds:[1.2,10.8]
+};
+const circularFlowState={injectionBalance:50};
+const CIRCULAR_FLOW_CONFIG={
+  nodeRadius:42,
+  nodes:{
+    households:{label:'Households',x:130,y:150},
+    firms:{label:'Firms',x:360,y:110},
+    government:{label:'Government',x:420,y:230},
+    financial:{label:'Financial',subLabel:'sector',x:180,y:260},
+    foreign:{label:'Rest of world',subLabel:'trade flows',x:320,y:320}
+  },
+  flows:[
+    {id:'consumption',start:'households',end:'firms',label:'Consumption',type:'real',baseColor:'16,185,129',offset:-22,labelOffset:{x:0,y:-14}},
+    {id:'wages',start:'firms',end:'households',label:'Income',type:'real',baseColor:'59,130,246',offset:18,labelOffset:{x:0,y:12}},
+    {id:'savings',start:'households',end:'financial',label:'Savings (leakage)',type:'leakage',baseColor:'239,68,68',offset:16,labelOffset:{x:-12,y:6}},
+    {id:'taxes',start:'households',end:'government',label:'Taxes (leakage)',type:'leakage',baseColor:'234,179,8',offset:4,labelOffset:{x:12,y:-8}},
+    {id:'imports',start:'households',end:'foreign',label:'Imports (leakage)',type:'leakage',baseColor:'246,76,63',offset:26,labelOffset:{x:0,y:18}},
+    {id:'investment',start:'financial',end:'firms',label:'Investment (injection)',type:'injection',baseColor:'16,185,129',offset:-8,labelOffset:{x:10,y:-10}},
+    {id:'govSpend',start:'government',end:'firms',label:'Gov spending (injection)',type:'injection',baseColor:'14,165,233',offset:0,labelOffset:{x:22,y:2}},
+    {id:'exports',start:'foreign',end:'firms',label:'Exports (injection)',type:'injection',baseColor:'34,197,94',offset:-14,labelOffset:{x:14,y:-6}}
+  ]
+};
+
 const aggregateDemandState={cShift:0,iShift:0,gShift:0,nxShift:0};
 const ppfState={capitalBias:0,technology:0};
+const adGraphState={shift:0};
+const longRunEqState={adShift:0,lrasShift:0};
+const lafferState={taxRate:30,enforcement:50};
+const AD_GRAPH_CONFIG={step:12,min:-48,max:48};
 const CURVE_SHIFT_CONFIG={min:-2,max:2,step:1};
 const shiftCurve=(value,direction)=>clamp(value+(direction*CURVE_SHIFT_CONFIG.step),CURVE_SHIFT_CONFIG.min,CURVE_SHIFT_CONFIG.max);
 
 const navButtons=qsa('.navBtn');
 const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
+const authOverlay=qs('#authOverlay');
+const authForm=qs('#authForm');
+const authTabs=qsa('[data-auth-mode]');
+const authRegisterFields=qsa('.authField--register');
+const authMessage=qs('#authMessage');
+const authSubmitButton=qs('#authSubmit');
+const authFooterHint=qs('#authFooterHint');
+const authSwitchMode=qs('#authSwitchMode');
+const authUsername=qs('#authUsername');
+const authPassword=qs('#authPassword');
+const authDisplayName=qs('#authDisplayName');
+const authRoleSelect=qs('#authRole');
+let authMode='login';
+
+function setAuthMode(mode){
+  if(!authOverlay) return;
+  authMode=mode==='register'?'register':'login';
+  authForm?.reset();
+  displayAuthMessage('');
+  if(authSubmitButton) authSubmitButton.textContent=authMode==='register'?'Create account':'Sign in';
+  if(authFooterHint) authFooterHint.textContent=authMode==='register'
+    ?'Teacher accounts unlock class analytics, while students can track progress.'
+    :'Sign in with your credentials to open the teacher dashboard.';
+  authRegisterFields?.forEach(field=>field.classList.toggle('hidden',authMode!=='register'));
+  authTabs?.forEach(tab=>tab.classList.toggle('authTab--active',tab.dataset.authMode===authMode));
+  if(authUsername) authUsername.focus();
+}
+
+function openAuthOverlay(mode='login'){
+  if(!authOverlay) return;
+  setAuthMode(mode);
+  authOverlay.classList.remove('hidden');
+  authOverlay.setAttribute('aria-hidden','false');
+}
+
+function closeAuthOverlay(){
+  if(!authOverlay) return;
+  authOverlay.classList.add('hidden');
+  authOverlay.setAttribute('aria-hidden','true');
+}
+
+function displayAuthMessage(text='',isError=true){
+  if(!authMessage) return;
+  authMessage.textContent=text;
+  authMessage.classList.toggle('authMessage--error',!!text&&isError);
+  authMessage.classList.toggle('authMessage--success',!!text&&!isError);
+}
+
+async function handleAuthSubmit(event){
+  event.preventDefault();
+  if(!authForm) return;
+  const username=authUsername?.value||'';
+  const password=authPassword?.value||'';
+  if(!username||!password){
+    displayAuthMessage('Username and password are required.');
+    return;
+  }
+  try{
+    if(authMode==='register'){
+      const role=authRoleSelect?.value||'student';
+      const displayName=authDisplayName?.value||username;
+      const user=await registerUser({username,password,displayName,role});
+      setActiveUser(user);
+      currentUser=user;
+      updateAuthStatusUI();
+      showStatus(`Welcome, ${user.displayName}`);
+    } else {
+      const user=await authenticateUser({username,password});
+      if(!user) throw new Error('Invalid username or password.');
+      setActiveUser(user);
+      currentUser=user;
+      updateAuthStatusUI();
+      showStatus(`Signed in as ${user.displayName}`);
+    }
+    renderTeacherPanel();
+    closeAuthOverlay();
+  }catch(err){
+    displayAuthMessage(err?.message||'Unable to sign in.');
+  }
+}
+
+function initAuthControls(){
+  const openBtn=qs('#btnAuthOpen');
+  const signOutBtn=qs('#btnAuthSignOut');
+  openBtn?.addEventListener('click',()=>openAuthOverlay('login'));
+  signOutBtn?.addEventListener('click',()=>{
+    clearActiveUser();
+    currentUser=null;
+    updateAuthStatusUI();
+    renderTeacherPanel();
+    showStatus('Signed out.');
+  });
+  qs('#authClose')?.addEventListener('click',closeAuthOverlay);
+  authTabs?.forEach(tab=>tab.addEventListener('click',()=>setAuthMode(tab.dataset.authMode)));
+  authSwitchMode?.addEventListener('click',()=>setAuthMode(authMode==='login'?'register':'login'));
+  authForm?.addEventListener('submit',handleAuthSubmit);
+  setAuthMode(authMode);
+}
+
+function updateAuthStatusUI(){
+  const status=qs('#authStatus');
+  const openBtn=qs('#btnAuthOpen');
+  const signOutBtn=qs('#btnAuthSignOut');
+  if(status){
+    if(currentUser){
+      status.textContent=`${currentUser.displayName||currentUser.username} (${currentUser.role})`;
+      status.classList.add('authStatus--signed');
+    } else {
+      status.textContent='Guest';
+      status.classList.remove('authStatus--signed');
+    }
+  }
+  if(openBtn) openBtn.textContent=currentUser?'Switch account':'Sign in';
+  if(signOutBtn) signOutBtn.classList.toggle('hidden',!currentUser);
+}
+
 function ensureLearnPanelRendered(){
-  if(learnPanelRendered) return;
   renderLearnPanel();
   learnPanelRendered=true;
 }
 function setTab(tab){
+  if(tab==="teacher" && (!currentUser||currentUser.role!=='teacher')){
+    showStatus('Sign in as a teacher to view this dashboard.',true,2600);
+    openAuthOverlay('login');
+    return;
+  }
   if(tab==="assess" && !settings.assessEnabled){
     tab="policies";
   }
   state.tab=tab;
   if(tab==="learn") ensureLearnPanelRendered();
-  navButtons.forEach(b=>b.classList.toggle('navBtn--active',b.dataset.tab===tab));
-  ["policies","parameters","learn","assess","about"].forEach(t=>qs(`#panel${t[0].toUpperCase()+t.slice(1)}`).classList.toggle('hidden',t!==tab));
-  qs('#panelTitle').textContent=tab[0].toUpperCase()+tab.slice(1);
+  navButtons.forEach(b=>{
+    const isActive=b.dataset.tab===tab;
+    b.classList.toggle('navBtn--active',isActive);
+    b.setAttribute('aria-selected',isActive?'true':'false');
+    b.setAttribute('tabindex',isActive?'0':'-1');
+  });
+  ["policies","parameters","learn","assess","about","teacher"].forEach(t=>{
+    const panel=qs(`#panel${t[0].toUpperCase()+t.slice(1)}`);
+    if(!panel) return;
+    const hidden=t!==tab;
+    panel.classList.toggle('hidden',hidden);
+    panel.setAttribute('aria-hidden',hidden?'true':'false');
+  });
+  const titleEl=qs('#panelTitle');
+  if(titleEl) titleEl.textContent=tab[0].toUpperCase()+tab.slice(1);
   qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");
 }
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
@@ -266,6 +638,13 @@ const paramDefs=[
 {key:'supplySideReform',label:'Supply-side policy intensity',hint:'Captures tax/regulation/training bundles.',min:0,max:100,step:1,format:v=>`${v}`}
 ];
 function renderParametersPanel(){const root=qs('#panelParameters'); root.innerHTML='<div class="sectionTitle">Explore drivers</div>'; paramDefs.forEach(d=>{const wrap=document.createElement('div'); wrap.className='slider'; wrap.innerHTML=`<div class="slider__top"><div><div class="slider__label">${d.label}</div><div class="slider__hint">${d.hint}</div></div><div class="slider__value" id="val_${d.key}">—</div></div><input type="range" id="rng_${d.key}" min="${d.min}" max="${d.max}" step="${d.step}" />`; root.appendChild(wrap);}); paramDefs.forEach(d=>{const rng=qs(`#rng_${d.key}`); rng.value=state.params[d.key]; rng.oninput=()=>{state.params[d.key]=Number(rng.value); onParamsChanged(true);}; addSwipeAdjust(rng,d.step);}); syncParamReadouts();}
+function applyAiScenarioSuggestion(suggestion){
+  if(!suggestion||!suggestion.params) return;
+  state.params={...defaults.params,...suggestion.params};
+  onParamsChanged(true);
+  showStatus(`AI scenario loaded: ${suggestion.title}`,false,2600);
+}
+
 function renderLearnPanel(){
   const root=qs('#panelLearn');
 
@@ -284,12 +663,12 @@ function renderLearnPanel(){
       </div>
 
       <div class="sectionTitle">Classroom investigations</div>
-      <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift + evaluate impact.</div>
+      <div class="sectionHint">Generate teacher-ready prompts, assign a starter scenario, and ask students to justify the shift and evaluate the impact.</div>
       <div class="learnCard investigationCard">
         <div class="investigationCard__top">
           <div>
             <div class="investigationCard__tag">IBDP 5.2 / 5.3 • AD/AS evaluation</div>
-            <div class="investigationCard__note">Refresh to craft prompts tied to the same curves students just explored.</div>
+            <div class="investigationCard__note">Click "Generate investigation brief" to craft prompts tied to the same curves students just explored.</div>
           </div>
           <div class="scenarioToolbar learnActions">
             <button id="btnGenerateInvestigation" class="btn btn--primary">Generate investigation brief</button>
@@ -383,6 +762,69 @@ function renderLearnPanel(){
         </div>
       </div>
 
+      <div class="learnLab" id="labLoanableFunds">
+        <div class="sectionTitle">Loanable funds market diagram lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnLfDemandLeft" class="btn btn--ghost" type="button">I demand ←</button>
+            <button id="btnLfDemandRight" class="btn btn--ghost" type="button">I demand →</button>
+            <button id="btnLfSupplyLeft" class="btn btn--ghost" type="button">Savings ←</button>
+            <button id="btnLfSupplyRight" class="btn btn--ghost" type="button">Savings →</button>
+            <button id="btnLfReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <label class="policy__text" for="lfPolicyRate">Policy-rate anchor: <span id="lfPolicyRateVal">4.0%</span></label>
+          <input id="lfPolicyRate" type="range" min="1" max="10" step="0.1" value="4.0" />
+          <svg id="loanableFundsSvg" viewBox="0 0 560 300" role="img" aria-label="Loanable funds market diagram"></svg>
+          <div id="loanableFundsCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+
+      <div class="learnLab" id="labCircularFlow">
+        <div class="sectionTitle">Circular flow of the economy lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnCircularFlowInject" class="btn btn--ghost" type="button">Boost injections</button>
+            <button id="btnCircularFlowLeak" class="btn btn--ghost" type="button">Boost leakages</button>
+            <button id="btnCircularFlowReset" class="btn btn--ghost" type="button">Balance flows</button>
+            <button id="btnExportCircularFlowPng" class="btn btn--ghost" type="button">Export circular flow (PNG)</button>
+          </div>
+          <label class="policy__text" for="circularFlowBalance">Injections vs leakages: <span id="circularFlowBalanceVal">50% injections · 50% leakages</span></label>
+          <input id="circularFlowBalance" type="range" min="0" max="100" step="5" value="50" />
+          <svg id="circularFlowSvg" viewBox="0 0 560 340" role="img" aria-label="Circular flow of the economy"></svg>
+          <div id="circularFlowCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+
+      <div class="learnLab" id="labAdGraph">
+        <div class="sectionTitle">Aggregate demand graph lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnAdGraphShiftLeft" class="btn btn--ghost" type="button">AD ←</button>
+            <button id="btnAdGraphShiftRight" class="btn btn--ghost" type="button">AD →</button>
+            <button id="btnAdGraphReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <svg id="adGraphSvg" viewBox="0 0 560 300" role="img" aria-label="Aggregate demand diagram"></svg>
+          <div id="adGraphCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+      <div class="learnLab" id="labLongRunEq">
+        <div class="sectionTitle">AD-AS long-run equilibrium lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnLrAdLeft" class="btn btn--ghost" type="button">AD ← (demand shock)</button>
+            <button id="btnLrAdRight" class="btn btn--ghost" type="button">AD → (demand shock)</button>
+            <button id="btnLrLrasLeft" class="btn btn--ghost" type="button">LRAS ←</button>
+            <button id="btnLrLrasRight" class="btn btn--ghost" type="button">LRAS →</button>
+            <button id="btnLrReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <svg id="lreqSvg" viewBox="0 0 560 300" role="img" aria-label="AD-AS long-run equilibrium diagram"></svg>
+          <div id="lreqCaption" class="policy__text"></div>
+        </div>
+      </div>
+
       <div class="learnLab" id="labPpf">
         <div class="sectionTitle">PPF (Production Possibility Frontier) lab</div>
         <div class="learnCard">
@@ -395,6 +837,25 @@ function renderLearnPanel(){
           </div>
           <svg id="ppfSvg" viewBox="0 0 560 300" role="img" aria-label="Production possibility frontier diagram"></svg>
           <div id="ppfCaption" class="policy__text"></div>
+        </div>
+      </div>
+
+      <div class="learnLab" id="labLaffer">
+        <div class="sectionTitle">Laffer curve tax-revenue lab</div>
+        <div class="learnCard">
+          <div class="scenarioToolbar learnActions">
+            <button id="btnLafferRateDown" class="btn btn--ghost" type="button">Tax rate −</button>
+            <button id="btnLafferRateUp" class="btn btn--ghost" type="button">Tax rate +</button>
+            <button id="btnLafferEnforcementDown" class="btn btn--ghost" type="button">Compliance −</button>
+            <button id="btnLafferEnforcementUp" class="btn btn--ghost" type="button">Compliance +</button>
+            <button id="btnLafferReset" class="btn btn--ghost" type="button">Reset</button>
+          </div>
+          <label class="policy__text" for="lafferRate">Tax rate: <span id="lafferRateVal">30%</span></label>
+          <input id="lafferRate" type="range" min="0" max="100" step="1" value="30" />
+          <label class="policy__text" for="lafferEnforcement">Compliance quality: <span id="lafferEnforcementVal">50%</span></label>
+          <input id="lafferEnforcement" type="range" min="0" max="100" step="1" value="50" />
+          <svg id="lafferSvg" viewBox="0 0 560 300" role="img" aria-label="Laffer curve diagram"></svg>
+          <div id="lafferCaption" class="policy__text"></div>
         </div>
       </div>
     </div>
@@ -416,6 +877,10 @@ function renderLearnPanel(){
       <div class="sectionTitle">Core revision modules</div>
       ${LEARN_MODULES.map(m=>`<div class="learnCard"><b>${escapeHtml(m.title)}</b><ul>${m.points.map(p=>`<li class="policy__text">${escapeHtml(p)}</li>`).join('')}</ul></div>`).join('')}
 
+      <div class="sectionTitle">Economic indicator quick reference</div>
+      <div class="sectionHint">Fast exam-focused reminders for interpreting macro data before writing analysis.</div>
+      ${ECONOMIC_INDICATOR_REFERENCE.map(ind=>`<div class="learnCard"><b>${escapeHtml(ind.name)}</b><div class="policy__text">Why it matters: ${escapeHtml(ind.why)}</div><div class="policy__text">Exam use: ${escapeHtml(ind.examUse)}</div></div>`).join('')}
+
       <div class="sectionTitle">IB Macro glossary</div>
       <div class="sectionHint">High-frequency concepts from AD–AS, stabilization policy, and macro evaluation.</div>
       ${GLOSSARY.map(g=>`<div class="learnCard"><b>${escapeHtml(g.term)}</b><div class="policy__text">${escapeHtml(g.blurb)}</div>${VIDEO_CONCEPTS.has(g.term)?'<div class="sectionHint" style="margin-top:4px;">🎥 Video lesson coming soon</div>':''}</div>`).join('')}
@@ -429,9 +894,46 @@ function renderLearnPanel(){
         </div>
       </div>
 
+      <div id="learnAi" class="learnSection">
+        <div class="sectionTitle">AI scenario suggestions</div>
+        <div class="sectionHint">Use these AI-inspired prompts to structure investigations and quickly reset your curves.</div>
+        <div class="learnAiGrid">
+          ${AI_SCENARIO_SUGGESTIONS.map(s=>`<div class="learnCard learnAiCard">
+            <div class="learnAiCard__header">
+              <div>
+                <div class="learnAiCard__title">${escapeHtml(s.title)}</div>
+                <div class="learnAiCard__focus">${escapeHtml(s.focus)}</div>
+              </div>
+              <button class="btn btn--ghost" type="button" data-ai-apply="${s.id}">Apply scenario</button>
+            </div>
+            <div class="policy__text learnAiCard__description">${escapeHtml(s.description)}</div>
+            <div class="learnAiCard__prompt"><strong>AI prompt:</strong> ${escapeHtml(s.prompt)}</div>
+            <ul class="learnAiCard__steps">
+              ${s.steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}
+            </ul>
+            <div class="learnAiCard__params">
+              ${Object.entries(s.params).map(([key,value])=>`<span>${escapeHtml(PARAM_LABELS[key]||key)}: ${escapeHtml(formatParamValue(key,value))}</span>`).join('')}
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <div class="sectionTitle">Interactive practice problems</div>
+      <div class="sectionHint">Quick multiple-choice checks with instant feedback.</div>
+      <div id="learnPracticeRoot"></div>
+
+      <div class="sectionTitle">Topic quiz mode</div>
+      <div class="sectionHint">Run a focused quiz per topic. Scores are tracked locally so you can review mastery over time.</div>
+      <div id="learnTopicQuizRoot"></div>
+      <div id="topicQuizHost"></div>
+
       <div class="sectionTitle">Flashcard mode (spaced repetition)</div>
       <div class="sectionHint">Review term/definition cards with adaptive intervals (Again/Hard/Good/Easy).</div>
       <div id="flashcardRoot"></div>
+
+      <div class="sectionTitle">Printable worksheet generator</div>
+      <div class="sectionHint">Pull a Learn topic, add instructions, and print a student-ready worksheet.</div>
+      <div id="worksheetGeneratorRoot"></div>
     </div>
   `;
   const learnNavButtons=root.querySelectorAll('.learnNav__button');
@@ -443,6 +945,16 @@ function renderLearnPanel(){
     });
   });
   if(learnNavButtons[0]) learnNavButtons[0].classList.add('learnNav__button--active');
+  const aiSection=qs('#learnAi');
+  if(aiSection){
+    aiSection.addEventListener('click',e=>{
+      const btn=e.target.closest('[data-ai-apply]');
+      if(!btn) return;
+      const suggestion=AI_SCENARIO_SUGGESTIONS.find(s=>s.id===btn.dataset.aiApply);
+      if(!suggestion) return;
+      applyAiScenarioSuggestion(suggestion);
+    });
+  }
   const txt=qs('#learnInvestigationText');
   const applyInvestigation=inv=>{
     if(txt) txt.value=inv.text;
@@ -464,6 +976,24 @@ function renderLearnPanel(){
   qs('#btnMmMsRight').onclick=()=>{moneyMarketState.msShift=shiftCurve(moneyMarketState.msShift,1); renderMoneyMarketDiagram();};
   qs('#btnMmReset').onclick=()=>{moneyMarketState.mdShift=0; moneyMarketState.msShift=0; moneyMarketState.policyRate=4.0; const slider=qs('#mmPolicyRate'); if(slider) slider.value='4.0'; renderMoneyMarketDiagram();};
   qs('#mmPolicyRate').oninput=e=>{moneyMarketState.policyRate=Number(e.target.value); renderMoneyMarketDiagram();};
+  const circularFlowBalanceSlider=qs('#circularFlowBalance');
+  const setCircularFlowBalance=value=>{
+    const clamped=clamp(value,0,100);
+    circularFlowState.injectionBalance=clamped;
+    if(circularFlowBalanceSlider) circularFlowBalanceSlider.value=String(clamped);
+    renderCircularFlowDiagram();
+  };
+  qs('#btnCircularFlowInject').onclick=()=>setCircularFlowBalance(circularFlowState.injectionBalance+10);
+  qs('#btnCircularFlowLeak').onclick=()=>setCircularFlowBalance(circularFlowState.injectionBalance-10);
+  qs('#btnCircularFlowReset').onclick=()=>setCircularFlowBalance(50);
+  if(circularFlowBalanceSlider) circularFlowBalanceSlider.addEventListener('input',e=>{const target=e.target; if(!target||!(target instanceof HTMLInputElement)) return; setCircularFlowBalance(Number(target.value));});
+  qs('#btnExportCircularFlowPng').onclick=()=>exportCircularFlowPng();
+  qs('#btnLfDemandLeft').onclick=()=>{loanableFundsState.demandShift=shiftCurve(loanableFundsState.demandShift,-1); renderLoanableFundsDiagram();};
+  qs('#btnLfDemandRight').onclick=()=>{loanableFundsState.demandShift=shiftCurve(loanableFundsState.demandShift,1); renderLoanableFundsDiagram();};
+  qs('#btnLfSupplyLeft').onclick=()=>{loanableFundsState.supplyShift=shiftCurve(loanableFundsState.supplyShift,-1); renderLoanableFundsDiagram();};
+  qs('#btnLfSupplyRight').onclick=()=>{loanableFundsState.supplyShift=shiftCurve(loanableFundsState.supplyShift,1); renderLoanableFundsDiagram();};
+  qs('#btnLfReset').onclick=()=>{loanableFundsState.demandShift=0; loanableFundsState.supplyShift=0; loanableFundsState.policyRate=4.0; const slider=qs('#lfPolicyRate'); if(slider) slider.value='4.0'; renderLoanableFundsDiagram();};
+  qs('#lfPolicyRate').oninput=e=>{loanableFundsState.policyRate=Number(e.target.value); renderLoanableFundsDiagram();};
   qs('#btnAdCompCDown').onclick=()=>{aggregateDemandState.cShift=shiftCurve(aggregateDemandState.cShift,-1); renderAggregateDemandComponents();};
   qs('#btnAdCompCUp').onclick=()=>{aggregateDemandState.cShift=shiftCurve(aggregateDemandState.cShift,1); renderAggregateDemandComponents();};
   qs('#btnAdCompIDown').onclick=()=>{aggregateDemandState.iShift=shiftCurve(aggregateDemandState.iShift,-1); renderAggregateDemandComponents();};
@@ -473,11 +1003,26 @@ function renderLearnPanel(){
   qs('#btnAdCompNXDown').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,-1); renderAggregateDemandComponents();};
   qs('#btnAdCompNXUp').onclick=()=>{aggregateDemandState.nxShift=shiftCurve(aggregateDemandState.nxShift,1); renderAggregateDemandComponents();};
   qs('#btnAdCompReset').onclick=()=>{aggregateDemandState.cShift=0;aggregateDemandState.iShift=0;aggregateDemandState.gShift=0;aggregateDemandState.nxShift=0; renderAggregateDemandComponents();};
+  qs('#btnAdGraphShiftLeft').onclick=()=>adjustAdGraphShift(-AD_GRAPH_CONFIG.step);
+  qs('#btnAdGraphShiftRight').onclick=()=>adjustAdGraphShift(AD_GRAPH_CONFIG.step);
+  qs('#btnAdGraphReset').onclick=()=>{adGraphState.shift=0; renderAdGraphDiagram();};
+  qs('#btnLrAdLeft').onclick=()=>{longRunEqState.adShift=shiftCurve(longRunEqState.adShift,-1); renderLongRunEquilibriumDiagram();};
+  qs('#btnLrAdRight').onclick=()=>{longRunEqState.adShift=shiftCurve(longRunEqState.adShift,1); renderLongRunEquilibriumDiagram();};
+  qs('#btnLrLrasLeft').onclick=()=>{longRunEqState.lrasShift=shiftCurve(longRunEqState.lrasShift,-1); renderLongRunEquilibriumDiagram();};
+  qs('#btnLrLrasRight').onclick=()=>{longRunEqState.lrasShift=shiftCurve(longRunEqState.lrasShift,1); renderLongRunEquilibriumDiagram();};
+  qs('#btnLrReset').onclick=()=>{longRunEqState.adShift=0; longRunEqState.lrasShift=0; renderLongRunEquilibriumDiagram();};
   qs('#btnPpfCapitalLeft').onclick=()=>{ppfState.capitalBias=shiftCurve(ppfState.capitalBias,-1); renderPpfDiagram();};
   qs('#btnPpfCapitalRight').onclick=()=>{ppfState.capitalBias=shiftCurve(ppfState.capitalBias,1); renderPpfDiagram();};
   qs('#btnPpfTechDown').onclick=()=>{ppfState.technology=shiftCurve(ppfState.technology,-1); renderPpfDiagram();};
   qs('#btnPpfTechUp').onclick=()=>{ppfState.technology=shiftCurve(ppfState.technology,1); renderPpfDiagram();};
   qs('#btnPpfReset').onclick=()=>{ppfState.capitalBias=0;ppfState.technology=0; renderPpfDiagram();};
+  qs('#btnLafferRateDown').onclick=()=>{lafferState.taxRate=clamp(lafferState.taxRate-5,0,100); const slider=qs('#lafferRate'); if(slider) slider.value=String(lafferState.taxRate); renderLafferDiagram();};
+  qs('#btnLafferRateUp').onclick=()=>{lafferState.taxRate=clamp(lafferState.taxRate+5,0,100); const slider=qs('#lafferRate'); if(slider) slider.value=String(lafferState.taxRate); renderLafferDiagram();};
+  qs('#btnLafferEnforcementDown').onclick=()=>{lafferState.enforcement=clamp(lafferState.enforcement-5,0,100); const slider=qs('#lafferEnforcement'); if(slider) slider.value=String(lafferState.enforcement); renderLafferDiagram();};
+  qs('#btnLafferEnforcementUp').onclick=()=>{lafferState.enforcement=clamp(lafferState.enforcement+5,0,100); const slider=qs('#lafferEnforcement'); if(slider) slider.value=String(lafferState.enforcement); renderLafferDiagram();};
+  qs('#btnLafferReset').onclick=()=>{lafferState.taxRate=30; lafferState.enforcement=50; const rate=qs('#lafferRate'); const enforce=qs('#lafferEnforcement'); if(rate) rate.value='30'; if(enforce) enforce.value='50'; renderLafferDiagram();};
+  qs('#lafferRate').oninput=e=>{lafferState.taxRate=Number(e.target.value); renderLafferDiagram();};
+  qs('#lafferEnforcement').oninput=e=>{lafferState.enforcement=Number(e.target.value); renderLafferDiagram();};
   qs('#btnPresetRecession').onclick=()=>applyPresetScenario('recession');
   qs('#btnPresetInflation').onclick=()=>applyPresetScenario('inflation');
   qs('#btnPresetGrowth').onclick=()=>applyPresetScenario('growth');
@@ -485,9 +1030,18 @@ function renderLearnPanel(){
   qs('#btnExportMmPng').onclick=()=>exportMoneyMarketPng();
   renderPhillipsCurve();
   renderMoneyMarketDiagram();
+  renderLoanableFundsDiagram();
+  renderCircularFlowDiagram();
   renderAggregateDemandComponents();
+  renderAdGraphDiagram();
+  renderLongRunEquilibriumDiagram();
   renderPpfDiagram();
+  renderLafferDiagram();
+  renderLearnPracticeModule();
+  renderLearnTopicQuizzes();
+  renderTopicQuizHost();
   renderFlashcardModule();
+  renderWorksheetGenerator();
   updateLearnSnapshot();
 }
 
@@ -696,6 +1250,132 @@ function renderMoneyMarketDiagram(){
   caption.innerHTML=`<b>Money market equilibrium</b>: i ≈ ${eqInterest.toFixed(1)}%, Q ≈ ${eqQuantity.toFixed(0)}. The golden dot marks where downward-sloping Md (blue) meets vertical Ms (green). Policy rate slider lifts/lowers Md, Md buttons shift demand left/right, and Ms buttons shift money supply left/right.`;
 }
 
+function renderLoanableFundsDiagram(){
+  const svg=qs('#loanableFundsSvg');
+  const caption=qs('#loanableFundsCaption');
+  const rateOut=qs('#lfPolicyRateVal');
+  if(!svg||!caption||!rateOut) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const x=q=>pad.l+((q-35)/130)*(W-pad.l-pad.r);
+  const y=i=>pad.t+((11.5-i)/10.5)*(H-pad.t-pad.b);
+  const cfg=LOANABLE_FUNDS_CONFIG;
+  const eqFunds=clamp(
+    cfg.baseFunds+loanableFundsState.supplyShift*cfg.supplyShiftFundsImpact-loanableFundsState.demandShift*cfg.demandShiftFundsImpact*0.35,
+    cfg.qBounds[0],
+    cfg.qBounds[1]
+  );
+  const eqRateRaw=loanableFundsState.policyRate+loanableFundsState.demandShift*cfg.demandShiftRateImpact-loanableFundsState.supplyShift*cfg.supplyShiftRateImpact;
+  const eqRate=clamp(eqRateRaw,cfg.rateBounds[0],cfg.rateBounds[1]);
+  const demandIntercept=eqRate-cfg.demandSlope*eqFunds;
+  const supplyIntercept=eqRate-cfg.supplySlope*eqFunds;
+  const demandShiftRateAdj=loanableFundsState.demandShift*0.5;
+  const supplyShiftRateAdj=loanableFundsState.supplyShift*0.45;
+  const demandLine=[
+    [cfg.qRange[0],demandIntercept+cfg.demandSlope*cfg.qRange[0]+demandShiftRateAdj],
+    [cfg.qRange[1],demandIntercept+cfg.demandSlope*cfg.qRange[1]+demandShiftRateAdj]
+  ];
+  const supplyLine=[
+    [cfg.qRange[0],supplyIntercept+cfg.supplySlope*cfg.qRange[0]-supplyShiftRateAdj],
+    [cfg.qRange[1],supplyIntercept+cfg.supplySlope*cfg.qRange[1]-supplyShiftRateAdj]
+  ];
+  const eqX=x(eqFunds);
+  const eqY=y(eqRate);
+  rateOut.textContent=`${loanableFundsState.policyRate.toFixed(1)}%`;
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Quantity of loanable funds</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Real interest rate (%)</text>
+  `;
+
+  strokePath(svg,pathFromPoints(x,y,demandLine),'rgba(239,68,68,0.95)',4);
+  strokePath(svg,pathFromPoints(x,y,supplyLine),'rgba(34,197,94,0.95)',4);
+  line(svg,pad.l,eqY,eqX-8,eqY,'rgba(250,204,21,0.6)',1.2,'4 4');
+  line(svg,eqX,eqY+8,eqX,H-pad.b,'rgba(250,204,21,0.6)',1.2,'4 4');
+  point(svg,eqX,eqY,5,'rgba(250,204,21,0.95)');
+  text(svg,x(demandLine[0][0])+8,y(demandLine[0][1])-8,'I demand','start','rgba(239,68,68,0.95)',11,true);
+  text(svg,x(supplyLine[1][0])-8,y(supplyLine[1][1])-8,'Savings','end','rgba(34,197,94,0.95)',11,true);
+  text(svg,pad.l-10,eqY+4,`${eqRate.toFixed(1)}%`,'end','rgba(250,204,21,0.95)',11,true);
+  text(svg,eqX,H-pad.b+18,`Q ≈ ${eqFunds.toFixed(0)}`,'middle','rgba(250,204,21,0.95)',11,true);
+  boxedLabel(svg,eqX+64,eqY-24,'Equilibrium','rgba(250,204,21,0.95)',{fill:'rgba(6,11,22,0.92)'});
+
+  caption.innerHTML=`<b>Loanable funds equilibrium</b>: r ≈ ${eqRate.toFixed(1)}%, Q ≈ ${eqFunds.toFixed(0)}. Investment demand (red) slopes downward and savings supply (green) slopes upward. Demand buttons shift investment demand; savings buttons shift funds supply.`;
+}
+
+function renderCircularFlowDiagram(){
+  const svg=qs('#circularFlowSvg');
+  const caption=qs('#circularFlowCaption');
+  const balanceLabel=qs('#circularFlowBalanceVal');
+  if(!svg||!caption||!balanceLabel) return;
+  const W=560,H=340;
+  const config=CIRCULAR_FLOW_CONFIG;
+  const injectionRatio=circularFlowState.injectionBalance/100;
+  const leakageRatio=1-injectionRatio;
+  balanceLabel.textContent=`${circularFlowState.injectionBalance.toFixed(0)}% injections · ${(100-circularFlowState.injectionBalance).toFixed(0)}% leakages`;
+  svg.innerHTML=`
+    <rect x='0' y='0' width='${W}' height='${H}' rx='16' fill='rgba(255,255,255,0.02)'/>
+    <line x1='${W/2}' y1='16' x2='${W/2}' y2='${H-16}' stroke='rgba(226,232,240,0.2)' stroke-width='1.4'/>
+    <line x1='16' y1='${H/2}' x2='${W-16}' y2='${H/2}' stroke='rgba(226,232,240,0.2)' stroke-width='1.4'/>
+    <text x='${W/2}' y='32' fill='rgba(226,232,240,0.8)' text-anchor='middle' font-size='13'>Money flows (clockwise) and product markets</text>`;
+  const nodes=config.nodes;
+  const radius=config.nodeRadius||40;
+  const shrinkPoint=(from,to)=>{
+    const dx=to[0]-from[0];
+    const dy=to[1]-from[1];
+    const dist=Math.hypot(dx,dy);
+    if(!dist) return [from[0],from[1]];
+    const offset=radius-6;
+    const ratio=offset/dist;
+    return [from[0]+dx*ratio, from[1]+dy*ratio];
+  };
+  config.flows.forEach(flow=>{
+    const source=nodes[flow.start];
+    const target=nodes[flow.end];
+    if(!source||!target) return;
+    const start=[source.x,source.y];
+    const end=[target.x,target.y];
+    const startPoint=shrinkPoint(start,end);
+    const endPoint=shrinkPoint(end,start);
+    const dx=endPoint[0]-startPoint[0];
+    const dy=endPoint[1]-startPoint[1];
+    const normal=[-dy,dx];
+    const normalLen=Math.hypot(normal[0],normal[1])||1;
+    const offset=flow.offset||0;
+    const midX=(startPoint[0]+endPoint[0])/2+(normal[0]/normalLen)*offset;
+    const midY=(startPoint[1]+endPoint[1])/2+(normal[1]/normalLen)*offset;
+    const path=`M ${startPoint[0].toFixed(1)} ${startPoint[1].toFixed(1)} Q ${midX.toFixed(1)} ${midY.toFixed(1)} ${endPoint[0].toFixed(1)} ${endPoint[1].toFixed(1)}`;
+    const intensity=flow.type==='injection'?injectionRatio:flow.type==='leakage'?leakageRatio:1;
+    const width=flow.type==='real'?3.2:2.6+intensity*3.2;
+    const alpha=flow.type==='real'?0.95:0.55+0.4*intensity;
+    const strokeColor=`rgba(${flow.baseColor},${alpha.toFixed(2)})`;
+    strokePath(svg,path,strokeColor,width);
+    point(svg,endPoint[0],endPoint[1],4.2,strokeColor);
+    if(flow.label&&flow.type!=='real'){
+      const labelX=midX+(flow.labelOffset?.x||0);
+      const labelY=midY+(flow.labelOffset?.y||0);
+      text(svg,labelX,labelY,flow.label,'middle','rgba(226,232,240,0.75)',10);
+    }
+  });
+  Object.values(nodes).forEach(node=>{
+    if(!node) return;
+    const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx',node.x.toFixed(1));
+    circle.setAttribute('cy',node.y.toFixed(1));
+    circle.setAttribute('r',String(radius));
+    circle.setAttribute('fill','rgba(15,23,42,0.95)');
+    circle.setAttribute('stroke','rgba(148,163,184,0.6)');
+    circle.setAttribute('stroke-width','1.8');
+    svg.appendChild(circle);
+    text(svg,node.x,node.y-(node.subLabel?6:0),node.label,'middle','rgba(226,232,240,0.95)',12.5,true);
+    if(node.subLabel) text(svg,node.x,node.y+12,node.subLabel,'middle','rgba(226,232,240,0.6)',10);
+  });
+  const balance=circularFlowState.injectionBalance;
+  const status=balance>52?'Injections exceed leakages, pushing aggregate demand upward.':balance<48?'Leakages outweigh injections, dampening spending.':'Leakages and injections stay balanced, keeping income stable.';
+  caption.innerHTML=`<b>Circular flow of income</b>: ${balance}% injections vs ${100-balance}% leakages. ${status} Savings, taxes, and imports withdraw spending while investment, government spending, and exports inject new demand.`;
+}
+
 function renderAggregateDemandComponents(){
   const svg=qs('#adComponentsSvg');
   const caption=qs('#adComponentsCaption');
@@ -723,6 +1403,96 @@ function renderAggregateDemandComponents(){
   `;
 
   caption.textContent=`AD components: C ${aggregateDemandState.cShift>=0?'+':''}${aggregateDemandState.cShift}, I ${aggregateDemandState.iShift>=0?'+':''}${aggregateDemandState.iShift}, G ${aggregateDemandState.gShift>=0?'+':''}${aggregateDemandState.gShift}, (X−M) ${aggregateDemandState.nxShift>=0?'+':''}${aggregateDemandState.nxShift}. Net AD shift changes equilibrium against SRAS.`;
+}
+
+function adjustAdGraphShift(delta){
+  adGraphState.shift=clamp(adGraphState.shift+delta,AD_GRAPH_CONFIG.min,AD_GRAPH_CONFIG.max);
+  renderAdGraphDiagram();
+}
+
+function renderAdGraphDiagram(){
+  const svg=qs('#adGraphSvg');
+  const caption=qs('#adGraphCaption');
+  if(!svg||!caption) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const toX=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r);
+  const toY=P=>pad.t+((GRAPH.Pmax-P)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
+  rect(svg,0,0,W,H,14,'rgba(255,255,255,0.02)');
+  line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.65)',2.5);
+  line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.65)',2.5);
+  text(svg,(pad.l+W-pad.r)/2,H-pad.b+20,'Real output (Y)','middle','rgba(226,232,240,0.9)',12);
+  textRot(svg,18,(pad.t+(H-pad.b))/2,'Price level (P)',-90,'middle','rgba(226,232,240,0.9)',12);
+  const baseSeg=adLineSegment(0).seg;
+  const shiftSeg=adLineSegment(adGraphState.shift).seg;
+  if(baseSeg) strokePath(svg,pathFromSegment(toX,toY,baseSeg),'rgba(148,163,184,0.45)',3,'3 3');
+  if(shiftSeg) strokePath(svg,pathFromSegment(toX,toY,shiftSeg),'rgba(239,68,68,0.95)',5);
+  if(shiftSeg){
+    const midY=lerp(shiftSeg[0][0],shiftSeg[1][0],0.68);
+    const midP=lerp(shiftSeg[0][1],shiftSeg[1][1],0.68);
+    boxedLabel(svg,toX(midY)+32,toY(midP)-22,'AD','rgba(239,68,68,0.95)',{fill:'rgba(6,11,22,0.92)'});
+  }
+  const anchorY=GRAPH.adPivotY;
+  const baseP=AD(anchorY,0);
+  const shiftP=AD(anchorY,adGraphState.shift);
+  const anchorX=toX(anchorY);
+  const basePointY=toY(baseP);
+  const shiftPointY=toY(shiftP);
+  if(Math.abs(adGraphState.shift)>1e-6){
+    line(svg,anchorX,basePointY,anchorX,shiftPointY,'rgba(250,204,21,0.6)',1.6,'4 4');
+    const arrowY=adGraphState.shift>0?shiftPointY:basePointY;
+    const arrowDir=adGraphState.shift>0?-6:6;
+    line(svg,anchorX,arrowY,anchorX+arrowDir,arrowY-6,'rgba(250,204,21,0.7)',1.4);
+    line(svg,anchorX,arrowY,anchorX-arrowDir,arrowY-6,'rgba(250,204,21,0.7)',1.4);
+    point(svg,anchorX,basePointY,4,'rgba(148,163,184,0.85)');
+    point(svg,anchorX,shiftPointY,5,'rgba(250,204,21,0.95)');
+  } else {
+    point(svg,anchorX,shiftPointY,5,'rgba(250,204,21,0.95)');
+  }
+  const directionLabel=adGraphState.shift===0?'Baseline AD':adGraphState.shift>0?'Rightward (demand-pull) shift':'Leftward (weaker demand) shift';
+  const directionDesc=adGraphState.shift===0?'baseline':adGraphState.shift>0?'rightward (demand-pull)':'leftward (weaker demand)';
+  const magnitude=adGraphState.shift===0?'':` (Δ ${adGraphState.shift>0?'+':''}${adGraphState.shift.toFixed(0)})`;
+  caption.innerHTML=`<b>Aggregate demand live</b>: ${directionLabel}${magnitude}. The golden dot highlights the price change at fixed output when ${directionDesc} demand occurs.`;
+}
+
+function renderLongRunEquilibriumDiagram(){
+  const svg=qs('#lreqSvg');
+  const caption=qs('#lreqCaption');
+  if(!svg||!caption) return;
+  const W=560,H=300,pad={l:64,r:20,t:20,b:46};
+  const toX=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r);
+  const toY=P=>pad.t+((GRAPH.Pmax-P)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
+  rect(svg,0,0,W,H,14,'rgba(255,255,255,0.02)');
+  line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.65)',2.5);
+  line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.65)',2.5);
+  text(svg,(pad.l+W-pad.r)/2,H-pad.b+20,'Real output (Y)','middle','rgba(226,232,240,0.9)',12);
+  textRot(svg,18,(pad.t+(H-pad.b))/2,'Price level (P)',-90,'middle','rgba(226,232,240,0.9)',12);
+
+  const adSeg=adLineSegment(longRunEqState.adShift).seg;
+  if(adSeg) strokePath(svg,pathFromSegment(toX,toY,adSeg),'rgba(239,68,68,0.95)',4.6);
+
+  const asBase=asLineSegments(0,GRAPH.yFeBase);
+  const yFeShifted=clamp(GRAPH.yFeBase+longRunEqState.lrasShift*6,GRAPH.Ymin+18,GRAPH.Ymax-18);
+  const asShifted=asLineSegments(0,yFeShifted);
+  if(asBase.seg1&&asBase.seg2){
+    strokePath(svg,pathFromSegment(toX,toY,asBase.seg1),'rgba(148,163,184,0.35)',2.4,'4 4');
+    strokePath(svg,pathFromSegment(toX,toY,asBase.seg2),'rgba(148,163,184,0.35)',2.4,'4 4');
+  }
+  if(asShifted.seg1&&asShifted.seg2){
+    strokePath(svg,pathFromSegment(toX,toY,asShifted.seg1),'rgba(59,130,246,0.95)',4.2);
+    strokePath(svg,pathFromSegment(toX,toY,asShifted.seg2),'rgba(59,130,246,0.95)',4.2);
+    boxedLabel(svg,toX(asShifted.yKink)+26,toY(asShifted.pKink)-12,'SRAS','rgba(59,130,246,0.95)',{fill:'rgba(6,11,22,0.9)'});
+  }
+  line(svg,toX(yFeShifted),toY(GRAPH.Pmin),toX(yFeShifted),toY(GRAPH.Pmax),'rgba(34,197,94,0.95)',3.6);
+  text(svg,toX(yFeShifted)+6,toY(GRAPH.Pmax)-8,'LRAS','start','rgba(34,197,94,0.95)',11,true);
+
+  const eq=equilibrium({adShiftY:longRunEqState.adShift,asShiftP:0,yFe:yFeShifted});
+  point(svg,toX(eq.y),toY(eq.p),5.5,'rgba(250,204,21,0.98)');
+  line(svg,toX(eq.y),toY(eq.p),toX(eq.y),H-pad.b,'rgba(250,204,21,0.7)',1.5,'5 5');
+  line(svg,pad.l,toY(eq.p),toX(eq.y),toY(eq.p),'rgba(250,204,21,0.7)',1.5,'5 5');
+
+  const adText=longRunEqState.adShift===0?'AD baseline':longRunEqState.adShift>0?'AD shifted right':'AD shifted left';
+  const lrasText=longRunEqState.lrasShift===0?'LRAS baseline':longRunEqState.lrasShift>0?'LRAS shifted right (higher potential output)':'LRAS shifted left (lower potential output)';
+  caption.innerHTML=`<b>Long-run equilibrium</b>: ${adText}; ${lrasText}. Current intersection gives <b>Y = ${eq.y.toFixed(1)}</b> and <b>P = ${eq.p.toFixed(1)}</b>. In the long run, supply-side gains move LRAS right and raise potential output.`;
 }
 
 function renderPpfDiagram(){
@@ -763,6 +1533,53 @@ function renderPpfDiagram(){
   caption.innerHTML=`<b>PPF interpretation</b>: ${biasLabel}, technology shift ${ppfState.technology>=0?'+':''}${ppfState.technology}. Points on the curve are productively efficient; inward/outward shifts represent lower/higher productive capacity.`;
 }
 
+function renderLafferDiagram(){
+  const svg=qs('#lafferSvg');
+  const caption=qs('#lafferCaption');
+  const rateVal=qs('#lafferRateVal');
+  const enforcementVal=qs('#lafferEnforcementVal');
+  if(!svg||!caption) return;
+
+  const W=560,H=300,pad={l:64,r:24,t:20,b:46};
+  const x=v=>pad.l+(v/100)*(W-pad.l-pad.r);
+  const y=v=>pad.t+((100-v)/100)*(H-pad.t-pad.b);
+
+  const compliance=0.65+(lafferState.enforcement/100)*0.55;
+  const peakRate=clamp(45-(lafferState.enforcement-50)*0.18,30,60);
+  const maxRevenue=clamp(68+(lafferState.enforcement-50)*0.26,45,92);
+  const revenueAtRate=rate=>{
+    const t=clamp(rate/100,0,1);
+    const p=peakRate/100;
+    const normalized=4*t*(1-t);
+    const skewAdj=1-Math.abs(t-p)*0.85;
+    return clamp(maxRevenue*normalized*skewAdj*compliance,0,100);
+  };
+
+  const points=[];
+  for(let r=0;r<=100;r+=2){ points.push([x(r),y(revenueAtRate(r))]); }
+  const curvePath=buildCatmullRomPath(points);
+  const currentRevenue=revenueAtRate(lafferState.taxRate);
+
+  svg.innerHTML=`
+    <rect x="0" y="0" width="${W}" height="${H}" rx="14" fill="rgba(255,255,255,0.02)"/>
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="rgba(226,232,240,0.65)" stroke-width="2.5"/>
+    <text x="${W/2}" y="${H-12}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12">Tax rate (%)</text>
+    <text x="18" y="${H/2}" fill="rgba(226,232,240,0.9)" text-anchor="middle" font-size="12" transform="rotate(-90 18 ${H/2})">Tax revenue index</text>
+    <path d="${curvePath}" fill="none" stroke="rgba(16,185,129,0.98)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <line x1="${x(lafferState.taxRate)}" y1="${H-pad.b}" x2="${x(lafferState.taxRate)}" y2="${y(currentRevenue)}" stroke="rgba(250,204,21,0.9)" stroke-width="1.8" stroke-dasharray="5 6"/>
+    <line x1="${pad.l}" y1="${y(currentRevenue)}" x2="${x(lafferState.taxRate)}" y2="${y(currentRevenue)}" stroke="rgba(250,204,21,0.9)" stroke-width="1.8" stroke-dasharray="5 6"/>
+    <circle cx="${x(lafferState.taxRate)}" cy="${y(currentRevenue)}" r="5" fill="rgba(250,204,21,0.95)"/>
+    <line x1="${x(peakRate)}" y1="${pad.t}" x2="${x(peakRate)}" y2="${H-pad.b}" stroke="rgba(96,165,250,0.5)" stroke-width="1.5" stroke-dasharray="4 6"/>
+    <text x="${x(peakRate)+6}" y="${pad.t+14}" fill="rgba(96,165,250,0.9)" font-size="11" font-weight="700">Peak ≈ ${peakRate.toFixed(0)}%</text>
+  `;
+
+  if(rateVal) rateVal.textContent=`${Math.round(lafferState.taxRate)}%`;
+  if(enforcementVal) enforcementVal.textContent=`${Math.round(lafferState.enforcement)}%`;
+
+  caption.innerHTML=`<b>Laffer interpretation</b>: at tax rate <b>${Math.round(lafferState.taxRate)}%</b>, estimated revenue index is <b>${currentRevenue.toFixed(1)}</b>. Higher compliance shifts potential revenue upward; very high rates can still reduce collections through base erosion and avoidance incentives.`;
+}
+
 function applyPresetScenario(kind){
   const profileId=PRESET_PROFILE_IDS[kind];
   if(!profileId) return;
@@ -776,12 +1593,13 @@ function applyPresetScenario(kind){
 
 function loadFlashcardProgress(){
   try{
-    const raw=JSON.parse(localStorage.getItem(FLASHCARD_STORAGE_KEY)||'{}');
+    const rawValue=storageGet(FLASHCARD_STORAGE_KEY);
+    const raw=JSON.parse(rawValue||'{}');
     return raw&&typeof raw==='object'?raw:{};
   }catch{return {};}
 }
 function saveFlashcardProgress(){
-  localStorage.setItem(FLASHCARD_STORAGE_KEY,JSON.stringify(flashcardProgress));
+  storageSet(FLASHCARD_STORAGE_KEY,JSON.stringify(flashcardProgress));
 }
 function getFlashcardMeta(term){
   const existing=flashcardProgress[term];
@@ -823,6 +1641,301 @@ function resetFlashcards(){
   flashcardProgress={};
   saveFlashcardProgress();
 }
+function updateWorksheetPreview(){
+  const preview=qs('#worksheetPrintArea');
+  if(!preview) return;
+  const topic=getWorksheetTopic();
+  const instructions=worksheetState.instructions||WORKSHEET_DEFAULT_INSTRUCTIONS;
+  const questions=(topic.questions||[]).slice();
+  const questionHtml=questions.length?questions.map((question,index)=>{
+    const optionHtml=question.options.map((option,optIndex)=>`<li>${String.fromCharCode(65+optIndex)}. ${escapeHtml(option)}</li>`).join('');
+    return `
+      <div class="worksheetQuestion">
+        <div class="worksheetQuestion__prompt">${index+1}. ${escapeHtml(question.prompt)}</div>
+        <ol class="worksheetQuestion__options" type="A">${optionHtml}</ol>
+        <div class="worksheetQuestion__responseLine">Response: __________________________________________</div>
+        ${worksheetState.includeAnswers?`<div class="worksheetQuestion__answerKey">Answer: ${escapeHtml(question.answer)}</div>`:''}
+      </div>`;
+  }).join(''):'<div class="policy__text">No questions available for this topic yet.</div>';
+  preview.innerHTML=`
+    <div class="worksheetPreview__header">
+      <div class="worksheetPreview__title">${escapeHtml(topic.title)} Worksheet</div>
+      <div class="worksheetPreview__meta">${escapeHtml(topic.summary)}</div>
+    </div>
+    <div class="worksheetPreview__instructions">
+      <strong>Instructions:</strong>
+      <p>${escapeHtml(instructions)}</p>
+    </div>
+    <div class="worksheetQuestions">${questionHtml}</div>
+  `;
+}
+
+function renderWorksheetGenerator(){
+  const root=qs('#worksheetGeneratorRoot');
+  if(!root) return;
+  const topicOptions=LEARN_TOPIC_PRACTICE.map(topic=>`<option value="${topic.id}">${escapeHtml(topic.title)}</option>`).join('');
+  root.innerHTML=`
+    <div class="learnCard worksheetGenerator">
+      <div class="worksheetGenerator__controls">
+        <div class="worksheetGenerator__selector">
+          <label class="policy__text" for="worksheetTopicSelect">Topic</label>
+          <select id="worksheetTopicSelect">${topicOptions}</select>
+        </div>
+        <label class="worksheetGenerator__toggle toggle"><input id="worksheetIncludeAnswers" type="checkbox"/> Include answer key (teacher copy)</label>
+        <div class="worksheetGenerator__actions">
+          <button id="worksheetPrintButton" class="btn btn--primary" type="button">Print worksheet</button>
+        </div>
+      </div>
+      <div class="worksheetGenerator__instructions">
+        <label class="policy__text" for="worksheetInstructions">Instructions</label>
+        <textarea id="worksheetInstructions" class="textInput" rows="3"></textarea>
+      </div>
+      <div id="worksheetPrintArea" class="worksheetPreview" role="region" aria-live="polite"></div>
+    </div>
+  `;
+  const topicSelect=qs('#worksheetTopicSelect');
+  if(topicSelect){
+    topicSelect.value=worksheetState.topicId;
+    topicSelect.onchange=e=>{
+      worksheetState.topicId=e.target.value;
+      updateWorksheetPreview();
+    };
+  }
+  const instructionsField=qs('#worksheetInstructions');
+  if(instructionsField){
+    instructionsField.value=worksheetState.instructions||WORKSHEET_DEFAULT_INSTRUCTIONS;
+    instructionsField.oninput=e=>{
+      worksheetState.instructions=e.target.value;
+      updateWorksheetPreview();
+    };
+  }
+  const answerToggle=qs('#worksheetIncludeAnswers');
+  if(answerToggle){
+    answerToggle.checked=worksheetState.includeAnswers;
+    answerToggle.onchange=e=>{
+      worksheetState.includeAnswers=e.target.checked;
+      updateWorksheetPreview();
+    };
+  }
+  const printButton=qs('#worksheetPrintButton');
+  if(printButton) printButton.onclick=()=>{
+    updateWorksheetPreview();
+    window.print();
+  };
+  updateWorksheetPreview();
+}
+
+function renderLearnPracticeModule(){
+  const root=qs('#learnPracticeRoot');
+  if(!root) return;
+  const attempts=progress.learnPracticeAttempts||[];
+  const avg=attempts.length?(attempts.reduce((a,b)=>a+b.score,0)/attempts.length).toFixed(1):'—';
+
+  root.innerHTML=`
+    <div class="learnCard">
+      <div class="policy__name">Practice history</div>
+      <div class="policy__text">Attempts: ${attempts.length} · Average score: ${avg}%</div>
+    </div>
+    <div class="learnCard">
+      <div id="learnPracticeProgress" class="policy__text">Session progress: 0/${TOTAL_PRACTICE_QUESTIONS} answered · 0 correct</div>
+    </div>
+    <div id="learnPracticeTopics" class="learnPracticeTopics"></div>
+    <div class="scenarioToolbar learnActions">
+      <button id="btnLearnPracticeRecord" class="btn btn--primary" type="button">Record practice attempt</button>
+    </div>
+  `;
+
+  const topicsHost=qs('#learnPracticeTopics');
+  if(!topicsHost) return;
+  topicsHost.innerHTML=LEARN_TOPIC_PRACTICE.map(topic=>`
+    <div class="learnPracticeTopic">
+      <div class="sectionTitle">${escapeHtml(topic.title)}</div>
+      <div class="sectionHint">${escapeHtml(topic.summary)}</div>
+      ${topic.questions.map(question=>`
+        <div class="learnCard learnPracticeTopic__card">
+          <div class="policy__text"><b>${escapeHtml(question.prompt)}</b></div>
+          <div class="scenarioToolbar learnActions">
+            ${question.options.map((option,idx)=>`<button type="button" class="btn btn--ghost" data-practice-topic="${topic.id}" data-practice-q="${question.id}" data-practice-option="${idx}">${escapeHtml(option)}</button>`).join('')}
+          </div>
+          <div id="learn_practice_fb_${question.id}" class="policy__text"></div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+
+  const practiceState={outcomes:[],answered:new Set()};
+  const progressLabel=qs('#learnPracticeProgress');
+  const updateSessionProgress=()=>{
+    const score=computePracticeScore(practiceState.outcomes);
+    if(progressLabel) progressLabel.textContent=`Session progress: ${practiceState.outcomes.length}/${TOTAL_PRACTICE_QUESTIONS} answered · ${score.correct} correct`;
+  };
+
+  topicsHost.onclick=e=>{
+    const button=e.target.closest('[data-practice-q]');
+    if(!button) return;
+    const questionId=button.dataset.practiceQ;
+    if(!questionId||practiceState.answered.has(questionId)) return;
+    const question=PRACTICE_QUESTION_LOOKUP.get(questionId);
+    if(!question) return;
+    const optionIndex=Number(button.dataset.practiceOption||'0');
+    const selection=question.options[optionIndex];
+    if(selection==null) return;
+    const feedback=evaluatePracticeAnswer(question,selection);
+    practiceState.answered.add(questionId);
+    practiceState.outcomes.push({questionId,topicId:button.dataset.practiceTopic,isCorrect:feedback.isCorrect});
+    const optionGroup=button.parentElement;
+    optionGroup?.querySelectorAll('button').forEach(b=>b.disabled=true);
+    const fb=qs(`#learn_practice_fb_${questionId}`);
+    if(fb) fb.textContent=feedback.message;
+    updateSessionProgress();
+  };
+
+  const recordButton=qs('#btnLearnPracticeRecord');
+  if(recordButton) recordButton.onclick=()=>{
+    if(!practiceState.outcomes.length){
+      showStatus('Answer at least one question before recording an attempt.',true,2200);
+      return;
+    }
+    const score=computePracticeScore(practiceState.outcomes);
+    progress.learnPracticeAttempts=[...(progress.learnPracticeAttempts||[]),{ts:Date.now(),score:score.score,total:score.total,correct:score.correct}].slice(-30);
+    saveProgress(progress);
+    showStatus(`Practice score recorded: ${score.score}%`);
+    renderLearnPracticeModule();
+  };
+
+  updateSessionProgress();
+}
+
+function formatShortDate(value){
+  if(!value) return '';
+  const date=new Date(value);
+  if(!Number.isFinite(date.getTime())) return '';
+  return date.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+
+function deriveTopicStats(attempts){
+  if(!attempts||!attempts.length) return {best:null,average:null,last:null};
+  const best=attempts.reduce((max,item)=>Math.max(max,item.score||0),0);
+  const average=Math.round(attempts.reduce((sum,item)=>sum+(item.score||0),0)/attempts.length);
+  const last=attempts[attempts.length-1];
+  return {best,average,last};
+}
+
+function renderLearnTopicQuizzes(){
+  const root=qs('#learnTopicQuizRoot');
+  if(!root) return;
+  const cards=LEARN_TOPIC_PRACTICE.map(topic=>{
+    const attempts=(progress.learnTopicQuizzes[topic.id]?.attempts)||[];
+    const stats=deriveTopicStats(attempts);
+    const active=topicQuizState.topicId===topic.id;
+    const lastLabel=stats.last?`Last: ${formatShortDate(stats.last.ts)} · ${stats.last.score}%`:'No attempts yet';
+    return `<div class="learnTopicQuizCard${active?' learnTopicQuizCard--active':''}">
+      <div class="learnTopicQuizCard__header">
+        <div>
+          <div class="policy__name">${escapeHtml(topic.title)}</div>
+          <div class="policy__text">${escapeHtml(topic.summary)}</div>
+        </div>
+        <button class="btn btn--ghost" data-topic-quiz-start="${topic.id}">Start quiz</button>
+      </div>
+      <div class="learnTopicQuizCard__stats">
+        <div><span>Best</span><strong>${stats.best!==null?stats.best+'%':'—'}</strong></div>
+        <div><span>Average</span><strong>${stats.average!==null?stats.average+'%':'—'}</strong></div>
+        <div><span>Attempts</span><strong>${attempts.length}</strong></div>
+        <div class="learnTopicQuizCard__meta">${escapeHtml(lastLabel)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  root.innerHTML=cards||'<div class="learnCard"><div class="policy__text">Start a topic quiz to capture scores per module.</div></div>';
+  root.onclick=e=>{const btn=e.target.closest('[data-topic-quiz-start]');if(!btn) return;startTopicQuiz(btn.dataset.topicQuizStart);};
+}
+
+function renderTopicQuizHost(){
+  const host=qs('#topicQuizHost');
+  if(!host) return;
+  if(!topicQuizState.topicId){
+    host.innerHTML=`<div class="learnCard"><div class="policy__name">Topic quiz mode</div><div class="policy__text">Select a quiz card above to begin. Scores track progress per topic.</div></div>`;
+    host.onclick=null;
+    return;
+  }
+  const topic=LEARN_TOPIC_PRACTICE.find(t=>t.id===topicQuizState.topicId);
+  if(!topic){ topicQuizState.topicId=null; renderTopicQuizHost(); return; }
+  if(topicQuizState.completed){
+    const summary=topicQuizState.summary||computePracticeScore(topicQuizState.answers.map(a=>({isCorrect:a.isCorrect})));
+    host.innerHTML=`<div class="learnCard learnTopicQuizActiveCard">
+      <div class="policy__name">Quiz complete — ${escapeHtml(topic.title)}</div>
+      <div class="policy__text">Score: ${summary.correct}/${summary.total} correct · ${summary.score}%</div>
+      <div class="policy__text">Your attempt is saved locally. Restart to try again.</div>
+      <div class="scenarioToolbar learnActions">
+        <button class="btn btn--ghost" data-topic-quiz-restart>Restart quiz</button>
+        <button class="btn btn--ghost" data-topic-quiz-newtopic>Pick another topic</button>
+      </div>
+    </div>`;
+  }else{
+    const question=topic.questions[topicQuizState.questionIndex];
+    if(!question){
+      topicQuizState.completed=true;
+      finalizeTopicQuiz(topic);
+      return;
+    }
+    host.innerHTML=`<div class="learnCard learnTopicQuizActiveCard">
+      <div class="policy__name">Quiz: ${escapeHtml(topic.title)}</div>
+      <div class="policy__text">Question ${topicQuizState.questionIndex+1} of ${topic.questions.length}</div>
+      <div class="policy__text" style="margin-top:8px;">${escapeHtml(question.prompt)}</div>
+      <div class="scenarioToolbar learnActions">
+        ${question.options.map((option,idx)=>`<button class="btn btn--ghost" data-topic-quiz-answer="${idx}">${escapeHtml(option)}</button>`).join('')}
+      </div>
+      ${topicQuizState.feedback?`<div class="policy__text learnTopicQuizFeedback ${topicQuizState.feedback.correct?'correct':'incorrect'}">${escapeHtml(topicQuizState.feedback.message)}</div>`:''}
+    </div>`;
+  }
+  host.onclick=e=>{const answerBtn=e.target.closest('[data-topic-quiz-answer]');if(answerBtn){handleTopicQuizAnswer(Number(answerBtn.dataset.topicQuizAnswer));return;}const restartBtn=e.target.closest('[data-topic-quiz-restart]');if(restartBtn){startTopicQuiz(topicQuizState.topicId);return;}const newTopic=e.target.closest('[data-topic-quiz-newtopic]');if(newTopic){topicQuizState.topicId=null;topicQuizState.feedback=null;topicQuizState.completed=false;topicQuizState.summary=null;topicQuizState.answers=[];topicQuizState.questionIndex=0;renderTopicQuizHost();renderLearnTopicQuizzes();}};
+}
+
+function startTopicQuiz(topicId){
+  const topicExists=LEARN_TOPIC_PRACTICE.some(t=>t.id===topicId);
+  if(!topicExists) return;
+  topicQuizState.topicId=topicId;
+  topicQuizState.questionIndex=0;
+  topicQuizState.answers=[];
+  topicQuizState.feedback=null;
+  topicQuizState.completed=false;
+  topicQuizState.summary=null;
+  renderTopicQuizHost();
+  renderLearnTopicQuizzes();
+}
+
+function handleTopicQuizAnswer(optionIndex){
+  const topic=LEARN_TOPIC_PRACTICE.find(t=>t.id===topicQuizState.topicId);
+  if(!topic||topicQuizState.completed) return;
+  const question=topic.questions[topicQuizState.questionIndex];
+  if(!question) return;
+  if(topicQuizState.answers.some(a=>a.questionId===question.id)) return;
+  const selection=question.options[optionIndex];
+  if(selection==null) return;
+  const isCorrect=selection===question.answer;
+  const message=isCorrect?`✅ Correct. ${question.explanation}`:`❌ Correct answer: ${question.answer}. ${question.explanation}`;
+  topicQuizState.answers.push({questionId:question.id,isCorrect});
+  topicQuizState.feedback={message,correct:isCorrect};
+  if(topicQuizState.answers.length>=topic.questions.length){
+    topicQuizState.completed=true;
+    finalizeTopicQuiz(topic);
+  }else{
+    topicQuizState.questionIndex=Math.min(topicQuizState.questionIndex+1,topic.questions.length-1);
+  }
+  renderTopicQuizHost();
+  renderLearnTopicQuizzes();
+}
+
+function finalizeTopicQuiz(topic){
+  const scoreInfo=computePracticeScore(topicQuizState.answers);
+  const history=progress.learnTopicQuizzes[topic.id]||{attempts:[]};
+  const attempt={ts:Date.now(),score:scoreInfo.score,total:scoreInfo.total,correct:scoreInfo.correct};
+  history.attempts=[...(history.attempts||[]),attempt].slice(-20);
+  progress.learnTopicQuizzes[topic.id]=history;
+  saveProgress(progress);
+  topicQuizState.summary=scoreInfo;
+  renderLearnTopicQuizzes();
+}
+
 function renderFlashcardModule(){
   const root=qs('#flashcardRoot');
   if(!root) return;
@@ -927,11 +2040,11 @@ function renderAboutPanel(){
     </div>
   `;
   qs('#toggleAccess').checked=settings.accessibility;
-  qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; localStorage.setItem('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
+  qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; storageSet('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
   qs('#toggleAssess').checked=settings.assessEnabled;
   qs('#toggleAssess').onchange=e=>{
     settings.assessEnabled=e.target.checked;
-    localStorage.setItem('macrow_assess_enabled',settings.assessEnabled?'1':'0');
+    storageSet('macrow_assess_enabled',settings.assessEnabled?'1':'0');
     syncAssessAvailability();
   };
   qs('#btnOpenShortcuts').onclick=openShortcuts;
@@ -939,14 +2052,43 @@ function renderAboutPanel(){
 
 // Teacher Dashboard MVP - Basic teacher view for monitoring student progress
 const TEACHER_STORAGE_KEY = 'macrow_teacher_data_v1';
-function loadTeacherData(){
-  try{return JSON.parse(localStorage.getItem(TEACHER_STORAGE_KEY)||'{}');}catch{return {};}
+function readTeacherStorage(){
+  try{
+    const raw=storageGet(TEACHER_STORAGE_KEY);
+    return raw?JSON.parse(raw):{};
+  }catch{
+    return {};
+  }
 }
-function saveTeacherData(data){localStorage.setItem(TEACHER_STORAGE_KEY,JSON.stringify(data));}
+function loadTeacherData(userKey){
+  if(!userKey) return {};
+  const store=readTeacherStorage();
+  return store[userKey]||{};
+}
+function saveTeacherData(userKey,data){
+  if(!userKey) return;
+  const store=readTeacherStorage();
+  store[userKey]=data||{};
+  storageSet(TEACHER_STORAGE_KEY,JSON.stringify(store));
+}
 
 function renderTeacherPanel(){
   const root=qs('#panelTeacher');
-  const teacherData=loadTeacherData();
+  if(!root) return;
+  if(!currentUser||currentUser.role!=='teacher'){
+    root.innerHTML=`
+      <div class="sectionTitle">Teacher dashboard</div>
+      <div class="sectionHint">Sign in as a teacher to unlock analytics and assignments.</div>
+      <div class="learnCard">
+        <div class="policy__name">Teacher access required</div>
+        <div class="policy__text">Authenticate to review student progress, assign scenarios, and unlock classroom tools.</div>
+        <div style="margin-top:14px;"><button id="btnTeacherSignIn" class="btn btn--primary">Sign in</button></div>
+      </div>
+    `;
+    qs('#btnTeacherSignIn')?.addEventListener('click',()=>openAuthOverlay('login'));
+    return;
+  }
+  const teacherData=loadTeacherData(currentUser.normalized);
   const students=teacherData.students||[];
   const assignedScenarios=teacherData.assignedScenarios||[];
   
@@ -959,6 +2101,94 @@ function renderTeacherPanel(){
   
   const now=Date.now();
   const fmtTime=ts=>{const diff=now-ts; if(diff<3600000)return'M'+Math.round(diff/60000); if(diff<86400000)return'H'+Math.round(diff/3600000); return'D'+Math.round(diff/86400000);};
+  const formatTimeAgo=ts=>{if(!Number.isFinite(ts))return'—';const label=fmtTime(ts);if(!label)return'—';const unit=label[0];const value=label.slice(1);if(!value)return'—';if(unit==='M')return`${value} min ago`;if(unit==='H')return`${value} hr ago`;if(unit==='D')return`${value} day${value==='1'?'':'s'} ago`;return`${value} ago`;};
+  const analytics=summarizeTeacherAnalytics({progress,scenarios,teacherData,now});
+  const avgScoreDisplay=analytics.avgScore!=null?`${analytics.avgScore}%`:'—';
+  const avgScoreHint=analytics.lastAttemptTs?`Last attempt ${fmtTime(analytics.lastAttemptTs)} ago`:'No quiz attempts recorded yet.';
+  const bestScoreNote=analytics.bestScore!=null?` · Best ${analytics.bestScore}%`:'';
+  const streakLabel=`${analytics.streak} day${analytics.streak===1?'':'s'}`;
+  const streakHint=analytics.streak?'Consistent quiz practice':'Record quizzes to build a streak';
+  const scenarioLabel=Number.isFinite(analytics.totalScenarios)?analytics.totalScenarios:0;
+  const scenarioHint=analytics.totalScenarios?`${analytics.scenarioCategories} categories saved`:'Save scenarios to track usage';
+  const assignmentLabel=analytics.assignmentsCount??0;
+  const assignmentHint=analytics.lastAssignmentTs?`Last assignment ${fmtTime(analytics.lastAssignmentTs)} ago`:'Assign a scenario to get started';
+  const practiceHistory=progress.learnPracticeAttempts||[];
+  const practiceAverage=practiceHistory.length
+    ? (practiceHistory.reduce((sum,attempt)=>sum+(Number(attempt.score)||0),0)/practiceHistory.length).toFixed(1)
+    : null;
+  const latestPractice=practiceHistory.length
+    ? practiceHistory[practiceHistory.length-1]
+    : null;
+  const competencyEntries=Object.entries(progress.competencies||{});
+  const competencyPoints=competencyEntries.reduce((sum,[_key,value])=>sum+(Number(value)||0),0);
+  const competencyCount=competencyEntries.length;
+  const topicInsights=Object.entries(progress.learnTopicQuizzes||{}).map(([topicId,entry])=>{
+    const attempts=(entry?.attempts)||[];
+    const stats=deriveTopicStats(attempts);
+    const topicMeta=LEARN_TOPIC_PRACTICE.find(t=>t.id===topicId);
+    return{
+      id:topicId,
+      title:topicMeta?.title||topicId,
+      attempts:attempts.length,
+      best:stats.best,
+      average:stats.average,
+      lastAttempt:stats.last
+    };
+  }).sort((a,b)=>((b.best||0)-(a.best||0)));
+  const topTopics=topicInsights.slice(0,3);
+  const timelineAttempts=(progress.quizAttempts||[]).slice(-4).reverse();
+  const timelineHtml=timelineAttempts.length
+    ? timelineAttempts.map(attempt=>`
+        <div class="progressTracker__timelineItem">
+          <div class="progressTracker__timelineScore">${Number.isFinite(Number(attempt.score))?`${Math.round(attempt.score)}%`:'—'}</div>
+          <div class="progressTracker__timelineHint">${formatTimeAgo(Number(attempt.ts))}</div>
+        </div>
+      `).join('')
+    : '<div class="policy__text">No quiz attempts yet. Encourage students to try the Assess tab.</div>';
+  const topicItemsHtml=topTopics.length
+    ? topTopics.map(topic=>`
+        <div class="progressTracker__topic">
+          <div class="progressTracker__topicTitle">${escapeHtml(topic.title)}</div>
+          <div class="progressTracker__topicValue">${topic.best!==null?`${topic.best}%`:'—'} best</div>
+          <div class="progressTracker__topicHint">${topic.attempts} attempt${topic.attempts===1?'':'s'} · ${topic.lastAttempt?`${topic.lastAttempt.score}% · ${formatTimeAgo(topic.lastAttempt.ts)}`:'No recent data'}</div>
+        </div>
+      `).join('')
+    : '<div class="progressTracker__topicEmpty">No topic quizzes recorded yet. Encourage students to explore the Learn tab.</div>';
+  const progressTrackerHtml=`
+    <div class="sectionTitle">Student progress tracking</div>
+    <div class="learnCard progressTracker">
+      <div class="progressTracker__grid">
+        <div class="progressTracker__item">
+          <div class="progressTracker__label">Average quiz score</div>
+          <div class="progressTracker__value">${analytics.avgScore!=null?`${analytics.avgScore}%`:'—'}</div>
+          <div class="progressTracker__hint">${analytics.attemptsCount} attempts · ${streakLabel} streak</div>
+        </div>
+        <div class="progressTracker__item">
+          <div class="progressTracker__label">Practice sessions</div>
+          <div class="progressTracker__value">${practiceHistory.length}</div>
+          <div class="progressTracker__hint">${practiceAverage!==null?`Avg ${practiceAverage}%`:'No practice recorded yet'}</div>
+        </div>
+        <div class="progressTracker__item">
+          <div class="progressTracker__label">Competency mastery</div>
+          <div class="progressTracker__value">${competencyCount?competencyPoints:'—'}</div>
+          <div class="progressTracker__hint">${competencyCount?`${competencyCount} competencies tracked`:'No competency data yet'}</div>
+        </div>
+        <div class="progressTracker__item">
+          <div class="progressTracker__label">Latest practice score</div>
+          <div class="progressTracker__value">${latestPractice?.score!=null?`${Math.round(latestPractice.score)}%`:'—'}</div>
+          <div class="progressTracker__hint">${latestPractice?formatTimeAgo(latestPractice.ts):'No recent practice'}</div>
+        </div>
+      </div>
+      <div class="progressTracker__timeline">
+        <div class="progressTracker__timelineTitle">Recent quiz attempts</div>
+        <div class="progressTracker__timelineList">${timelineHtml}</div>
+      </div>
+      <div class="progressTracker__topics">
+        <div class="progressTracker__topicsTitle">Topic performance</div>
+        <div class="progressTracker__topicList">${topicItemsHtml}</div>
+      </div>
+    </div>
+  `;
   
   root.innerHTML=`
     <div class="sectionTitle">Teacher Dashboard</div>
@@ -973,7 +2203,34 @@ function renderTeacherPanel(){
       </div>
     </div>
     
-    <div class="sectionTitle">Student Progress</div>
+    <div class="sectionTitle">Teacher analytics</div>
+    <div class="learnCard analyticsGrid">
+      <div class="analyticsMetric">
+        <div class="analyticsMetric__value">${scenarioLabel}</div>
+        <div class="analyticsMetric__label">Scenarios saved</div>
+        <div class="analyticsMetric__hint">${scenarioHint}</div>
+      </div>
+      <div class="analyticsMetric">
+        <div class="analyticsMetric__value">${avgScoreDisplay}</div>
+        <div class="analyticsMetric__label">Average quiz score</div>
+        <div class="analyticsMetric__hint">${avgScoreHint}${bestScoreNote}</div>
+      </div>
+      <div class="analyticsMetric">
+        <div class="analyticsMetric__value">${streakLabel}</div>
+        <div class="analyticsMetric__label">Quiz streak</div>
+        <div class="analyticsMetric__hint">${streakHint}</div>
+      </div>
+      <div class="analyticsMetric">
+        <div class="analyticsMetric__value">${assignmentLabel}</div>
+        <div class="analyticsMetric__label">Assignments assigned</div>
+        <div class="analyticsMetric__hint">${assignmentHint}</div>
+      </div>
+    </div>
+    
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="sectionTitle" style="margin:0;">Student Progress</div>
+      <button id="btnExportTeacherProgressCsv" class="btn btn--ghost" type="button">Export progress (CSV)</button>
+    </div>
     ${displayStudents.map(s=>`
       <div class="learnCard">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -986,6 +2243,31 @@ function renderTeacherPanel(){
         <div style="margin-top:8px;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;"><div style="background:rgba(59,130,246,0.8);height:100%;border-radius:3px;width:${s.progress||0}%"></div></div>
       </div>
     `).join('')}
+    
+    <div class="sectionTitle">Lesson plan library</div>
+    <div class="lessonPlanLibrary">
+      ${LESSON_PLANS.map(plan=>`
+        <div class="lessonPlanCard">
+          <div class="lessonPlanCard__header">
+            <div>
+              <div class="lessonPlanCard__title">${escapeHtml(plan.title)}</div>
+              <div class="lessonPlanCard__focus">${escapeHtml(plan.focus)}</div>
+            </div>
+            <div class="lessonPlanCard__duration">${escapeHtml(plan.duration)}</div>
+          </div>
+          <div class="lessonPlanCard__objective">${escapeHtml(plan.objective)}</div>
+          <ul class="lessonPlanCard__steps">
+            ${plan.steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}
+          </ul>
+          ${plan.resources && plan.resources.length ? `<div class="lessonPlanCard__resources">${plan.resources.map(resource=>`<div>${escapeHtml(resource)}</div>`).join('')}</div>` : ''}
+          <div class="lessonPlanCard__actions">
+            <button class="btn btn--ghost btn--full" data-lesson-plan="${plan.id}">Load scenario & share</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    
+    ${progressTrackerHtml}
     
     <div class="sectionTitle">Assign Scenarios</div>
     <div class="learnCard">
@@ -1014,18 +2296,47 @@ function renderTeacherPanel(){
       </div>
     </div>
   `;
-  
+
+  root.querySelectorAll('[data-lesson-plan]').forEach(btn=>{
+    btn.onclick=()=>handleLessonPlanLoad(btn.dataset.lessonPlan);
+  });
+
   qs('#btnAssignScenario').onclick=()=>{
     const select=qs('#teacherScenarioSelect');
-    const scenario=select.value;
+    const scenario=select?.value;
     if(!scenario) return;
-    const data=loadTeacherData();
-    data.assignedScenarios=data.assignedScenarios||[];
-    data.assignedScenarios.unshift({scenario:select.options[select.selectedIndex].text,assignedAt:Date.now()});
-    saveTeacherData(data);
+    const assignment={scenario:select.options[select.selectedIndex].text,assignedAt:Date.now()};
+    const updatedData={
+      ...teacherData,
+      assignedScenarios:[assignment,...(teacherData.assignedScenarios||[])]
+    };
+    saveTeacherData(currentUser.normalized,updatedData);
     renderTeacherPanel();
   };
+
+  qs('#btnExportTeacherProgressCsv')?.addEventListener('click',()=>{
+    exportTeacherProgressCsv({
+      students:displayStudents,
+      progress,
+      analytics,
+      now:Date.now()
+    });
+  });
 }
+
+function handleLessonPlanLoad(planId){
+  const plan=LESSON_PLANS.find(p=>p.id===planId);
+  if(!plan) return;
+  const profile=plan.profile&&SHIFT_PROFILES[plan.profile];
+  if(profile){
+    state.params=applyShiftProfile(deepCopy(defaults.params),profile);
+  } else if(plan.manual){
+    state.params={...state.params,...plan.manual};
+  }
+  onParamsChanged(true);
+  showStatus(`${plan.title} lesson plan loaded. Share it with your class.`,false,3200);
+}
+
 function syncParamReadouts(){paramDefs.forEach(d=>{qs(`#val_${d.key}`).textContent=d.format(state.params[d.key]); qs(`#rng_${d.key}`).value=state.params[d.key];});}
 
 qs('#btnReset').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
@@ -1033,14 +2344,23 @@ qs('#btnMakeRecession').onclick=()=>{state.params=applyShiftProfile(deepCopy(def
 qs('#btnMakeDemandPull').onclick=()=>{state.params=applyShiftProfile(deepCopy(defaults.params),SHIFT_PROFILES.preset_inflation); onParamsChanged(true);};
 qs('#btnMakeCostPush').onclick=()=>{state.params=applyShiftProfile(deepCopy(defaults.params),SHIFT_PROFILES.cost_push); onParamsChanged(true);};
 qs('#btnClearGap').onclick=()=>{state.params=deepCopy(defaults.params); onParamsChanged(true);};
-qs('#toggleAxisNumbers').onchange=e=>{settings.showAxisNumbers=e.target.checked; localStorage.setItem('macrow_show_axis_numbers',settings.showAxisNumbers?'1':'0'); renderMainChart();}; qs('#toggleAxisNumbers').checked=settings.showAxisNumbers;
+qs('#toggleAxisNumbers').onchange=e=>{settings.showAxisNumbers=e.target.checked; storageSet('macrow_show_axis_numbers',settings.showAxisNumbers?'1':'0'); renderMainChart();}; qs('#toggleAxisNumbers').checked=settings.showAxisNumbers;
 qs('#btnExportPng').onclick=()=>exportChartPng();
+qs('#btnExportSvg').onclick=()=>exportChartSvg();
 
 let pendingRender=false;
 function queueRender(){
   if(pendingRender) return;
   pendingRender=true;
-  requestAnimationFrame(()=>{pendingRender=false; renderMainChart();});
+  const runner=()=>{
+    pendingRender=false;
+    renderMainChart();
+  };
+  if(typeof requestAnimationFrame=="function"){
+    requestAnimationFrame(runner);
+  } else {
+    setTimeout(runner,16);
+  }
 }
 function onParamsChanged(pushHistory=false){
   Object.assign(state,computeFromParams(state.params));
@@ -1051,11 +2371,15 @@ function onParamsChanged(pushHistory=false){
   const sharePanel=qs('#sharePanel');
   if(sharePanel && !sharePanel.classList.contains('hidden')) refreshShareLinkPreview();
   if(pushHistory) pushPolicyHistory();
+  const scenarioOverlay=qs('#scenarioOverlay');
+  if(scenarioComparisonController&&scenarioOverlay&&!scenarioOverlay.classList.contains('hidden')){
+    scenarioComparisonController.refresh();
+  }
 }
 function pushPolicyHistory(){const stamp={ts:Date.now(),params:deepCopy(state.params)}; state.history=state.history.slice(0,state.historyIndex+1); state.history.push(stamp); state.historyIndex=state.history.length-1;}
 function replayHistory(dir){if(!state.history.length)return; state.historyIndex=clamp(state.historyIndex+dir,0,state.history.length-1); state.params=deepCopy(state.history[state.historyIndex].params); onParamsChanged(false);}
 
-function renderMainChart(){const svg=qs('#chartSvg'); svg.innerHTML=''; const W=860,H=560,pad={l:86,r:28,t:20,b:78},x=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r),y=P=>pad.t+(1-(P-GRAPH.Pmin)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
+function renderMainChart(){const svg=qs('#chartSvg'); if(!svg) return; svg.innerHTML=''; const W=860,H=560,pad={l:86,r:28,t:20,b:78},x=Y=>pad.l+((Y-GRAPH.Ymin)/(GRAPH.Ymax-GRAPH.Ymin))*(W-pad.l-pad.r),y=P=>pad.t+(1-(P-GRAPH.Pmin)/(GRAPH.Pmax-GRAPH.Pmin))*(H-pad.t-pad.b);
 rect(svg,0,0,W,H,18,'rgba(255,255,255,0.02)'); [30,50,70,90,110].forEach(P=>{line(svg,pad.l,y(P),W-pad.r,y(P),'rgba(148,163,184,0.10)',1); if(settings.showAxisNumbers) text(svg,pad.l-10,y(P)+4,String(P),'end','rgba(148,163,184,0.70)',12);}); [60,90,120,150,180].forEach(Y=>{line(svg,x(Y),pad.t,x(Y),H-pad.b,'rgba(148,163,184,0.08)',1); if(settings.showAxisNumbers) text(svg,x(Y),H-pad.b+22,String(Y),'middle','rgba(148,163,184,0.70)',12);}); line(svg,pad.l,pad.t,pad.l,H-pad.b,'rgba(226,232,240,0.70)',3); line(svg,pad.l,H-pad.b,W-pad.r,H-pad.b,'rgba(226,232,240,0.70)',3); text(svg,(pad.l+(W-pad.r))/2,H-18,'Real GDP ($)','middle','rgba(226,232,240,0.92)',15,true); textRot(svg,22,(pad.t+(H-pad.b))/2,'Average Price Level ($)',-90,'middle','rgba(226,232,240,0.92)',15,true);
 const cur={adShiftY:state.adShiftY,asShiftP:state.asShiftP,yFe:state.yFe}, base=computeFromParams(defaults.params);
 const baseEq=equilibrium(base),curEq=equilibrium(cur);
@@ -1067,6 +2391,7 @@ if(state.compare.on && state.compare.snapshot){
 }
 drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H,{showSecond:hasShift});
 addGraphTooltips(svg,x,y,cur); renderState(base,cur);
+markChartRendered();
 }
 function drawCurveSet(svg,x,y,v,tint,muted=false,opt={}){
   const {dash,showLabels=true}=opt;
@@ -1083,8 +2408,11 @@ function renderState(base,cur){
   const b=equilibrium(base),c=equilibrium(cur),dY=c.y-b.y,dP=c.p-b.p,dYf=cur.yFe-base.yFe;
   const num=v=>Number(v).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
   const delta=v=>`Δ ${v>0?'+':''}${num(v)}`;
-  qs('#changeChips').innerHTML='';
-  qs('#changeChips').append(chip(dY,'Output'),chip(dP,'Prices'));
+  const chipsRoot=qs('#changeChips');
+  if(chipsRoot){
+    chipsRoot.innerHTML='';
+    chipsRoot.append(chip(dY,'Output'),chip(dP,'Prices'));
+  }
 
   const gap=c.y-cur.yFe;
   const gapPercent=(gap/cur.yFe)*100;
@@ -1093,20 +2421,29 @@ function renderState(base,cur){
   if(gap<-2){stateText=`Recessionary gap: ${Math.abs(gapPercent).toFixed(1)}% below potential output`; stateClass='recessionary';}
   else if(gap>2){stateText=`Inflationary gap: ${gapPercent.toFixed(1)}% above potential output`; stateClass='inflationary';}
   else if(c.p>75){stateText='Rising price pressure near potential output'; stateClass='pressure';}
-  qs('#gapLabel').textContent=stateText;
-  qs('#gapLabel').setAttribute('data-state',stateClass);
+  const gapEl=qs('#gapLabel');
+  if(gapEl){
+    gapEl.textContent=stateText;
+    gapEl.setAttribute('data-state',stateClass);
+  }
 
-  qs('#statOutputValue').textContent=`Y ${num(c.y)}`;
-  qs('#statPriceValue').textContent=`P ${num(c.p)}`;
-  qs('#statPotentialValue').textContent=`Yf ${num(cur.yFe)}`;
-  qs('#statOutputDelta').textContent=delta(dY);
-  qs('#statPriceDelta').textContent=delta(dP);
-  qs('#statPotentialDelta').textContent=delta(dYf);
+  const setStat=(selector,value)=>{const el=qs(selector); if(el) el.textContent=value;};
+  setStat('#statOutputValue',`Y ${num(c.y)}`);
+  setStat('#statPriceValue',`P ${num(c.p)}`);
+  setStat('#statPotentialValue',`Yf ${num(cur.yFe)}`);
+  setStat('#statOutputDelta',delta(dY));
+  setStat('#statPriceDelta',delta(dP));
+  setStat('#statPotentialDelta',delta(dYf));
 }
 const chip=(d,l)=>{const el=document.createElement('div'); el.className='chip'; el.textContent=`${l} ${d>1?'↑':d<-1?'↓':'→'}`; return el;};
 
-function addGraphTooltips(svg,xScale,yScale,cur){const tip=qs('#chartTooltip'); const as=ASshape(cur); const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}]; items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});}
-
+function addGraphTooltips(svg,xScale,yScale,cur){
+  const tip=qs('#chartTooltip');
+  if(!tip) return;
+  const as=ASshape(cur);
+  const items=[{label:'Aggregate Demand (AD)',text:'Total spending: C + I + G + (X−M).',x:invertAD_Y(75,cur.adShiftY),y:75},{label:'Short-run Aggregate Supply',text:'Output producers are willing to supply at each price level.',x:as.yKink+8,y:60},{label:'Yf (potential output)',text:'Potential output where SRAS reaches the vertical LRAS segment.',x:as.yFe,y:as.pEnd},{label:'Real GDP axis',text:'Horizontal axis shows real output (Y).',x:120,y:22},{label:'Price level axis',text:'Vertical axis shows the average price level (P).',x:43,y:70}];
+  items.forEach(it=>{const c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',xScale(it.x)); c.setAttribute('cy',yScale(it.y)); c.setAttribute('r','11'); c.setAttribute('fill','transparent'); c.setAttribute('tabindex','0'); c.setAttribute('aria-label',`${it.label} info`); c.style.cursor='help'; c.onmouseenter=c.onfocus=e=>{tip.innerHTML=`<b>${it.label}</b><br>${it.text}`; tip.classList.remove('hidden'); tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; c.onmouseleave=c.onblur=()=>tip.classList.add('hidden'); c.onmousemove=e=>{tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px';}; svg.appendChild(c);});
+}
 function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H,opt={}){
   const {showSecond=true}=opt;
   const xAxisY=H-pad.b;
@@ -1197,10 +2534,49 @@ function drawEquilibriumGuides(svg,x,y,baseEq,curEq,pad,H,opt={}){
 function openShortcuts(){const ov=qs('#shortcutsOverlay'); ov.classList.remove('hidden'); ov.setAttribute('aria-hidden','false'); qs('#shortcutsList').innerHTML=KEYBOARD_SHORTCUTS.map(s=>`<div class='learnCard'><b>${escapeHtml(s.key)}</b> — ${escapeHtml(s.desc)}</div>`).join('');}
 qs('#shortcutsClose').onclick=()=>{qs('#shortcutsOverlay').classList.add('hidden'); qs('#shortcutsOverlay').setAttribute('aria-hidden','true');};
 
-function initScenarioManager(){qs('#btnScenarios').onclick=()=>{qs('#scenarioOverlay').classList.remove('hidden'); qs('#scenarioOverlay').setAttribute('aria-hidden','false'); renderScenarioList();}; qs('#scenarioClose').onclick=closeScenarioModal; qs('#btnSaveScenario').onclick=saveScenario; qs('#btnExportJson').onclick=exportScenariosJson; qs('#scenarioImportFile').onchange=importScenariosJson; qs('#btnShareScenario').onclick=shareScenarioURL; qs('#btnQrExport').onclick=exportScenarioQr; qs('#btnQrScan').onclick=startQrScanner;}
-function closeScenarioModal(){qs('#scenarioOverlay').classList.add('hidden'); qs('#scenarioOverlay').setAttribute('aria-hidden','true'); stopQrScanner();}
-function saveScenario(){const name=qs('#scenarioName').value.trim()||`Scenario ${scenarios.length+1}`,category=qs('#scenarioCategory').value; scenarios.unshift({id:crypto.randomUUID(),name,category,params:deepCopy(state.params),createdAt:Date.now()}); persistScenarios(); renderScenarioList();}
-function persistScenarios(){localStorage.setItem(SCENARIO_STORAGE_KEY,JSON.stringify(scenarios));}
+function initScenarioManager(){
+  scenarioComparisonController=createScenarioComparisonController();
+  const opener=qs('#btnScenarios');
+  opener.onclick=()=>{qs('#scenarioOverlay').classList.remove('hidden'); qs('#scenarioOverlay').setAttribute('aria-hidden','false'); renderScenarioList();};
+  qs('#scenarioClose').onclick=closeScenarioModal;
+  qs('#btnSaveScenario').onclick=saveScenario;
+  qs('#btnExportJson').onclick=exportScenariosJson;
+  qs('#scenarioImportFile').onchange=importScenariosJson;
+  qs('#btnShareScenario').onclick=shareScenarioURL;
+  qs('#btnQrExport').onclick=exportScenarioQr;
+  qs('#btnQrScan').onclick=()=>startQrScanner('scenario');
+  const commentBtn=qs('#btnAddScenarioComment');
+  commentBtn?.addEventListener('click',addScenarioComment);
+  const commentInput=qs('#scenarioCommentInput');
+  commentInput?.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault(); addScenarioComment();}});
+  const favoritesToggle=qs('#toggleScenarioFavorites');
+  if(favoritesToggle){
+    favoritesToggle.checked=scenarioFilterState.favoritesOnly;
+    favoritesToggle.addEventListener('change',e=>{scenarioFilterState.favoritesOnly=e.target.checked; renderScenarioList();});
+  }
+}
+
+function closeScenarioModal(){qs('#scenarioOverlay').classList.add('hidden'); qs('#scenarioOverlay').setAttribute('aria-hidden','true'); stopQrScanner('scenario');}
+function saveScenario(){const name=qs('#scenarioName').value.trim()||`Scenario ${scenarios.length+1}`,category=qs('#scenarioCategory').value; const newScenario={id:crypto.randomUUID(),name,category,params:deepCopy(state.params),createdAt:Date.now(),comments:[],favorite:false}; scenarios.unshift(newScenario); state.activeScenarioId=newScenario.id; persistScenarios(); renderScenarioList();}
+function createSampleScenario(){
+  const sample={
+    id:crypto.randomUUID(),
+    name:'Sample scenario: inflation shock',
+    category:'policy',
+    params:deepCopy({...defaults.params,ad:55,sras:46,money:47,gov:58,cons:49,inv:47,exp:46,imp:54}),
+    createdAt:Date.now(),
+    comments:[{id:crypto.randomUUID(),text:'Use this starter to compare demand and supply-side responses.',createdAt:Date.now()}],
+    favorite:false
+  };
+  scenarios.unshift(sample);
+  state.activeScenarioId=sample.id;
+  state.params=deepCopy(sample.params);
+  persistScenarios();
+  onParamsChanged(true);
+  renderScenarioList();
+  showStatus('Sample scenario loaded. You can save your own version anytime.',false,2600);
+}
+function persistScenarios(){storageSet(SCENARIO_STORAGE_KEY,JSON.stringify(scenarios));}
 
 function showStatus(msg,error=false,ms=2400){
   const box=qs('#appStatus');
@@ -1229,29 +2605,304 @@ async function ensureQrLibs(){
   await ensureScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
 }
 
-function renderScenarioList(){const root=qs('#scenarioListRoot'); root.innerHTML=scenarios.map(s=>`<div class="scenarioItem"><div><b>${escapeHtml(s.name)}</b><div class="sectionHint">${escapeHtml(s.category)}</div></div><div><button class="btn btn--ghost" data-load="${s.id}">Load</button><button class="btn btn--ghost" data-del="${s.id}">Delete</button></div></div>`).join('')||'<div class="sectionHint">No saved scenarios yet.</div>'; root.onclick=e=>{const l=e.target.closest('[data-load]'),d=e.target.closest('[data-del]'); if(l){const s=scenarios.find(x=>x.id===l.dataset.load); if(s){state.params=deepCopy(s.params); onParamsChanged(true);}} if(d){scenarios=scenarios.filter(x=>x.id!==d.dataset.del); persistScenarios(); renderScenarioList();}};}
-function exportScenariosJson(){const blob=new Blob([JSON.stringify(scenarios,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='macrow-scenarios.json'; a.click();}
-function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){const safe=data.filter(x=>x&&typeof x==='object'&&x.params&&typeof x.params==='object').map(x=>({id:crypto.randomUUID(),name:String(x.name||'Imported scenario'),category:String(x.category||'custom'),params:deepCopy({...defaults.params,...x.params}),createdAt:Date.now()})); scenarios=safe.concat(scenarios); persistScenarios(); renderScenarioList();} else {alert('Invalid scenario format');}}catch{alert('Invalid JSON')}}; r.readAsText(f); e.target.value='';}
-function encodeScenario(s){
-  const bytes=new TextEncoder().encode(JSON.stringify(s));
-  let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
-  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-function decodeScenario(raw){
-  const b64=raw.replace(/-/g,'+').replace(/_/g,'/');
-  const padded=b64 + '==='.slice((b64.length+3)%4);
-  try{
-    const bin=atob(padded);
-    const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
-    return JSON.parse(new TextDecoder().decode(bytes));
-  }catch{
-    return JSON.parse(decodeURIComponent(escape(atob(raw))));
+function renderScenarioList(){
+  const root=qs('#scenarioListRoot');
+  if(!root) return;
+  const filtered=scenarios.filter(s=>!scenarioFilterState.favoritesOnly||s.favorite);
+  if(!filtered.length){
+    const favoritesMode=scenarioFilterState.favoritesOnly;
+    const message=favoritesMode?'No favorite scenarios yet. Star one to bookmark it.':'No saved scenarios yet. Start with a sample scenario.';
+    const sampleCta=favoritesMode?'':`<button type="button" class="btn btn--ghost" data-create-sample="true">Load sample scenario</button>`;
+    root.innerHTML=`<div class="sectionHint">${escapeHtml(message)}</div>${sampleCta}`;
+    root.onclick=e=>{
+      const sampleBtn=e.target.closest('[data-create-sample]');
+      if(sampleBtn) createSampleScenario();
+    };
+    renderScenarioComments();
+    scenarioComparisonController?.refresh();
+    return;
   }
+  const listHtml=filtered.map(s=>{
+    const activeClass=state.activeScenarioId===s.id?' scenarioItem--active':'';
+    const commentCount=Array.isArray(s.comments)?s.comments.length:0;
+    const commentLabel=commentCount>0?`${commentCount} comment${commentCount===1?'':'s'}`:'No comments yet';
+    const favoriteBtn=`<button type="button" class="scenarioItem__favorite" data-favorite="${s.id}" data-active="${s.favorite?'true':'false'}" aria-label="${s.favorite?'Remove from favorites':'Add to favorites'}">${s.favorite?'★':'☆'}</button>`;
+    return `<div class="scenarioItem${activeClass}"><div class="scenarioItem__main"><div class="scenarioItem__nameRow"><span class="scenarioItem__name">${escapeHtml(s.name)}</span>${favoriteBtn}</div><div class="scenarioItem__meta">${escapeHtml(s.category)} · ${escapeHtml(commentLabel)}</div></div><div class="scenarioItem__actions"><button class="btn btn--ghost" data-load="${s.id}">Load</button><button class="btn btn--ghost" data-del="${s.id}">Delete</button></div></div>`;
+  }).join('');
+  root.innerHTML=listHtml;
+  root.onclick=e=>{
+    const favBtn=e.target.closest('[data-favorite]');
+    if(favBtn){
+      toggleScenarioFavorite(favBtn.dataset.favorite);
+      return;
+    }
+    const loadBtn=e.target.closest('[data-load]');
+    if(loadBtn){
+      const scenario=scenarios.find(x=>x.id===loadBtn.dataset.load);
+      if(scenario){
+        state.params=deepCopy(scenario.params);
+        state.activeScenarioId=scenario.id;
+        onParamsChanged(true);
+        renderScenarioList();
+        return;
+      }
+    }
+    const deleteBtn=e.target.closest('[data-del]');
+    if(deleteBtn){
+      const deleteId=deleteBtn.dataset.del;
+      scenarios=scenarios.filter(x=>x.id!==deleteId);
+      if(state.activeScenarioId===deleteId) state.activeScenarioId=null;
+      persistScenarios();
+      renderScenarioList();
+    }
+  };
+  renderScenarioComments();
+  scenarioComparisonController?.refresh();
 }
-function buildScenarioURL(s){
-  const payload={name:s.name,params:s.params,category:s.category};
-  return `${location.origin}${location.pathname}?scenario=${encodeURIComponent(encodeScenario(payload))}`;
+
+function toggleScenarioFavorite(id){
+  const scenario=scenarios.find(x=>x.id===id);
+  if(!scenario) return;
+  scenario.favorite=!scenario.favorite;
+  persistScenarios();
+  renderScenarioList();
 }
+
+function getActiveScenario(){
+  if(!state.activeScenarioId) return null;
+  return scenarios.find(s=>s.id===state.activeScenarioId)||null;
+}
+
+function renderScenarioComments(){
+  const list=qs('#scenarioCommentList');
+  const status=qs('#scenarioCommentsStatus');
+  const input=qs('#scenarioCommentInput');
+  const button=qs('#btnAddScenarioComment');
+  if(!list||!input||!button){
+    return;
+  }
+  const scenario=getActiveScenario();
+  if(!scenario){
+    list.innerHTML='<div class="sectionHint">Save or load a scenario to add comments.</div>';
+    if(status) status.textContent='No scenario selected';
+    input.disabled=true;
+    button.disabled=true;
+    input.placeholder='Save or load a scenario to add a comment';
+    return;
+  }
+  const comments=Array.isArray(scenario.comments)?scenario.comments:[];
+  const summaryText=`${comments.length} comment${comments.length===1?'':'s'}`;
+  if(status) status.textContent=summaryText;
+  input.disabled=false;
+  button.disabled=false;
+  input.placeholder='Add a comment to this scenario';
+  if(comments.length===0){
+    list.innerHTML='<div class="sectionHint">No comments yet for this scenario.</div>';
+    return;
+  }
+  const sorted=[...comments].sort((a,b)=>b.createdAt-a.createdAt);
+  list.innerHTML=sorted.map(comment=>`<div class="scenarioComment"><div class="scenarioComment__text">${escapeHtml(comment.text)}</div><div class="scenarioComment__meta">${escapeHtml(formatCommentTimestamp(comment.createdAt))}</div></div>`).join('');
+}
+
+function addScenarioComment(){
+  const input=qs('#scenarioCommentInput');
+  if(!input) return;
+  const text=input.value.trim();
+  if(!text){
+    showStatus('Type a comment before adding.',true,2200);
+    return;
+  }
+  const scenario=getActiveScenario();
+  if(!scenario){
+    showStatus('Save or load a scenario to add comments.',true,2200);
+    return;
+  }
+  addCommentToScenario(scenario,text);
+  persistScenarios();
+  input.value='';
+  renderScenarioComments();
+  showStatus('Comment saved!',false,2000);
+}
+
+
+function getScenarioComparisonOptions(){
+  const baseOption={
+    id:'current',
+    name:'Current scenario',
+    label:'Current scenario (live)',
+    category:'Live state',
+    params:deepCopy(state.params),
+    isCurrent:true
+  };
+  const saved=scenarios.map(s=>({
+    id:s.id,
+    name:s.name||'Scenario',
+    label:s.name||'Scenario',
+    category:s.category||'Saved scenario',
+    params:s.params
+  }));
+  return [baseOption,...saved];
+}
+
+function describeScenarioForComparison(option){
+  const snapshot=computeFromParams(option.params);
+  const eq=equilibrium(snapshot);
+  const gap=eq.y-snapshot.yFe;
+  const gapPercent=snapshot.yFe? (gap/snapshot.yFe)*100 : 0;
+  let descriptor='Near full-employment equilibrium';
+  let descriptorClass='near-equilibrium';
+  if(gap<-2){
+    descriptor=`Recessionary gap: ${Math.abs(gapPercent).toFixed(1)}% below potential output`;
+    descriptorClass='recessionary';
+  } else if(gap>2){
+    descriptor=`Inflationary gap: ${gapPercent.toFixed(1)}% above potential output`;
+    descriptorClass='inflationary';
+  } else if(eq.p>75){
+    descriptor='Rising price pressure near potential output';
+    descriptorClass='pressure';
+  }
+  return {snapshot,eq,gap,gapPercent,descriptor,descriptorClass};
+}
+
+const formatComparisonNumber=value=>Number(value).toLocaleString(undefined,{minimumFractionDigits:1,maximumFractionDigits:1});
+
+function formatComparisonDelta(delta,formatFn){
+  if(Math.abs(delta)<1e-6) return '—';
+  const display=formatFn(Math.abs(delta));
+  return delta>0?`+${display}`:`−${display}`;
+}
+
+function buildScenarioComparisonCard(option,label){
+  const {snapshot,eq,descriptor,descriptorClass}=describeScenarioForComparison(option);
+  const title=option.name||'Scenario';
+  const category=option.category|| (option.isCurrent?'Live state':'Saved scenario');
+  const stats=[
+    {label:'Output (Y)',value:`Y ${formatComparisonNumber(eq.y)}`},
+    {label:'Price level (P)',value:`P ${formatComparisonNumber(eq.p)}`},
+    {label:'Potential output (Yf)',value:`Yf ${formatComparisonNumber(snapshot.yFe)}`}
+  ];
+  const statsHtml=stats.map(stat=>`<div class="scenarioCompare__stat"><div class="scenarioCompare__statLabel">${stat.label}</div><div class="scenarioCompare__statValue">${stat.value}</div></div>`).join('');
+  const paramsHtml=paramDefs.map(d=>`<div class="scenarioCompare__param"><span>${escapeHtml(d.label)}</span><strong>${d.format(option.params[d.key])}</strong></div>`).join('');
+  return `<div class="scenarioCompare__cardHeader"><div><div class="scenarioCompare__cardTitle">${escapeHtml(title)}</div><div class="scenarioCompare__cardCategory">${escapeHtml(category)}</div></div><div class="scenarioCompare__sideLabel">${escapeHtml(label)}</div></div><div class="stateLabel scenarioCompare__descriptor" data-state="${descriptorClass}">${escapeHtml(descriptor)}</div><div class="scenarioCompare__stats">${statsHtml}</div><div class="scenarioCompare__params">${paramsHtml}</div>`;
+}
+
+function renderScenarioComparisonDiff(leftOption,rightOption,root){
+  if(!root) return;
+  if(!leftOption||!rightOption){
+    root.innerHTML='<div class="sectionHint">Select scenarios to compare.</div>';
+    return;
+  }
+  if(leftOption.id===rightOption.id){
+    root.innerHTML='<div class="sectionHint">Select two different scenarios to compare them.</div>';
+    return;
+  }
+  const rows=paramDefs.map(d=>{
+    const leftVal=leftOption.params[d.key];
+    const rightVal=rightOption.params[d.key];
+    const delta=rightVal-leftVal;
+    const deltaLabel=formatComparisonDelta(delta,d.format);
+    const deltaClass=delta>0?'up':delta<0?'down':'flat';
+    return `<tr><td>${escapeHtml(d.label)}</td><td>${d.format(leftVal)}</td><td>${d.format(rightVal)}</td><td class="scenarioCompare__delta scenarioCompare__delta--${deltaClass}">${deltaLabel}</td></tr>`;
+  }).join('');
+  root.innerHTML=`<div class="scenarioCompare__diffHeading">Parameter differences</div><div class="scenarioCompare__diffTableWrap"><table><thead><tr><th>Parameter</th><th>Scenario A</th><th>Scenario B</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function createScenarioComparisonController(){
+  const leftSelect=qs('#scenarioCompareLeft');
+  const rightSelect=qs('#scenarioCompareRight');
+  const swapBtn=qs('#scenarioCompareSwap');
+  const leftCard=qs('#scenarioCompareLeftCard');
+  const rightCard=qs('#scenarioCompareRightCard');
+  const diffRoot=qs('#scenarioCompareDiff');
+  if(!leftSelect||!rightSelect||!leftCard||!rightCard||!diffRoot) return null;
+  let cachedOptions=[];
+  const buildOptions=()=>{
+    const updates=getScenarioComparisonOptions();
+    cachedOptions=updates;
+    const prevLeft=leftSelect.value;
+    const prevRight=rightSelect.value;
+    const optionsHtml=updates.map(opt=>{
+      const labelText=opt.isCurrent?`${opt.name||'Current scenario'} (live)`:opt.name||'Scenario';
+      return `<option value="${opt.id}">${escapeHtml(labelText)}</option>`;
+    }).join('');
+    leftSelect.innerHTML=optionsHtml;
+    rightSelect.innerHTML=optionsHtml;
+    const leftCandidate=updates.find(opt=>opt.id===prevLeft)?.id||updates[0]?.id||'';
+    leftSelect.value=leftCandidate;
+    const fallback=updates.find(opt=>opt.id!==leftCandidate);
+    rightSelect.value=updates.find(opt=>opt.id===prevRight)?.id||(fallback?.id||leftCandidate);
+  };
+  const renderCards=()=>{
+    if(!cachedOptions.length){
+      const message='<div class="sectionHint">Save scenarios to compare them.</div>';
+      leftCard.innerHTML=message;
+      rightCard.innerHTML=message;
+      diffRoot.innerHTML=message;
+      return;
+    }
+    const leftOption=cachedOptions.find(opt=>opt.id===leftSelect.value)||cachedOptions[0];
+    const rightOption=cachedOptions.find(opt=>opt.id===rightSelect.value)||cachedOptions.find(opt=>opt.id!==leftOption.id)||leftOption;
+    leftCard.innerHTML=buildScenarioComparisonCard(leftOption,'Scenario A');
+    rightCard.innerHTML=buildScenarioComparisonCard(rightOption,'Scenario B');
+    renderScenarioComparisonDiff(leftOption,rightOption,diffRoot);
+  };
+  const refresh=()=>{buildOptions();renderCards();};
+  leftSelect.addEventListener('change',renderCards);
+  rightSelect.addEventListener('change',renderCards);
+  swapBtn?.addEventListener('click',()=>{
+    const leftValue=leftSelect.value;
+    const rightValue=rightSelect.value;
+    if(leftValue&&rightValue&&leftValue!==rightValue){
+      leftSelect.value=rightValue;
+      rightSelect.value=leftValue;
+      renderCards();
+    }
+  });
+  refresh();
+  return {refresh};
+}
+
+function csvCell(value){
+  const text=String(value??'');
+  const escaped=text.replace(/"/g,'""');
+  return /[",\n]/.test(text)?`"${escaped}"`:escaped;
+}
+
+function exportTeacherProgressCsv({students=[],progress={},analytics={},now=Date.now()}={}){
+  const rows=[["student_id","student_name","progress_pct","assess_score_pct","last_active","latest_practice_score_pct","quiz_attempts","topic_quiz_attempts","avg_quiz_score_pct","streak_days","exported_at"]];
+  const practiceAttempts=Array.isArray(progress.learnPracticeAttempts)?progress.learnPracticeAttempts:[];
+  const latestPractice=practiceAttempts.length?practiceAttempts[practiceAttempts.length-1]:null;
+  const quizAttempts=Array.isArray(progress.quizAttempts)?progress.quizAttempts:[];
+  const topicQuizAttempts=Object.values(progress.learnTopicQuizzes||{}).reduce((sum,entry)=>sum+((entry?.attempts?.length)||0),0);
+  const avgScore=analytics?.avgScore!=null?analytics.avgScore:'';
+  const streak=Number.isFinite(Number(analytics?.streak))?Number(analytics.streak):0;
+  students.forEach(student=>{
+    rows.push([
+      student?.id||'',
+      student?.name||'',
+      Number.isFinite(Number(student?.progress))?Math.round(Number(student.progress)):'',
+      Number.isFinite(Number(student?.assessScore))?Math.round(Number(student.assessScore)):'',
+      Number.isFinite(Number(student?.lastActive))?new Date(Number(student.lastActive)).toISOString():'',
+      latestPractice?.score!=null?Math.round(Number(latestPractice.score)):'',
+      quizAttempts.length,
+      topicQuizAttempts,
+      avgScore,
+      streak,
+      new Date(now).toISOString()
+    ]);
+  });
+  const csv=rows.map(row=>row.map(csvCell).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`macrow-student-progress-${new Date(now).toISOString().slice(0,10)}.csv`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  showStatus('Student progress exported as CSV');
+}
+
+function exportScenariosJson(){const blob=new Blob([JSON.stringify(scenarios,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='macrow-scenarios.json'; a.click();}
+function importScenariosJson(e){const f=e.target.files?.[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{try{const data=JSON.parse(r.result); if(Array.isArray(data)){const safe=data.filter(x=>x&&typeof x==='object'&&x.params&&typeof x.params==='object').map(x=>({id:crypto.randomUUID(),name:String(x.name||'Imported scenario'),category:String(x.category||'custom'),params:deepCopy({...defaults.params,...x.params}),createdAt:Date.now(),comments:Array.isArray(x.comments)?x.comments:[]})); const normalized=normalizeScenarios(safe,defaults.params); scenarios=normalized.concat(scenarios); persistScenarios(); renderScenarioList();} else {alert('Invalid scenario format');}}catch{alert('Invalid JSON')}}; r.readAsText(f); e.target.value='';}
 function buildStateURLFromParams(params){
   const url=new URL(`${location.origin}${location.pathname}`);
   Object.entries(URL_STATE_PARAM_MAP).forEach(([key,shortKey])=>{
@@ -1285,7 +2936,7 @@ function applyStateParamsFromUrl(){
 function loadImage(src){return new Promise((resolve,reject)=>{const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=src;});}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();}
 function downloadCanvas(canvas,fileName){const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=fileName; a.click();}
-async function shareScenarioURL(){const url=buildScenarioURL(getScenarioForShare()); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
+async function shareScenarioURL(){const url=buildScenarioUrl(getScenarioForShare()); try{await navigator.clipboard?.writeText(url); alert('Scenario URL copied.');}catch{prompt('Copy scenario URL:',url);}}
 async function exportScenarioQr(){
   const area=qs('#qrArea');
   area.classList.remove('hidden');
@@ -1320,7 +2971,7 @@ async function renderScenarioQrPreview(root,opts={}){
   if(!root) return;
   const {width=220,headingText='Scan this QR to load the scenario',includeDownload=false}=opts;
   const payload=getScenarioForShare();
-  const link=buildScenarioURL(payload);
+  const link=buildScenarioUrl(payload);
   root.classList.remove('hidden');
   root.innerHTML='';
   try{
@@ -1364,67 +3015,165 @@ function initShareTools(){
   const closer=qs('#btnCloseSharePanel');
   const copyBtn=qs('#btnShareLinkPanel');
   const qrBtn=qs('#btnShowShareQrPanel');
+  const scanBtn=qs('#btnShareScanQr');
+  const scannerStop=qs('#btnShareScannerStop');
   const preview=qs('#shareLinkPreview');
   const qrArea=qs('#shareQrPreview');
   opener?.addEventListener('click',()=>{
     panel.classList.remove('hidden');
     refreshShareLinkPreview();
     qrArea?.classList.add('hidden');
+    stopQrScanner('share');
   });
-  closer?.addEventListener('click',()=>panel.classList.add('hidden'));
+  closer?.addEventListener('click',()=>{
+    stopQrScanner('share');
+    panel.classList.add('hidden');
+  });
   copyBtn?.addEventListener('click',copyScenarioShareLink);
   preview?.addEventListener('click',copyScenarioShareLink);
   qrBtn?.addEventListener('click',()=>renderScenarioQrPreview(qrArea,{width:220,headingText:'Scan this QR to load the same scenario',includeDownload:true}));
+  scanBtn?.addEventListener('click',()=>startQrScanner('share'));
+  scannerStop?.addEventListener('click',()=>stopQrScanner('share'));
 }
-let qrStream=null,qrLoopId=null;
-async function startQrScanner(){
-  const area=qs('#qrScannerArea'),hint=qs('#qrScannerHint'),video=qs('#qrVideo'),canvas=qs('#qrCanvas');
-  area.classList.remove('hidden');
-  stopQrScanner();
-  try{
-    await ensureQrLibs();
-    const isMobile=window.matchMedia('(pointer:coarse)').matches;
-    qrStream=await navigator.mediaDevices.getUserMedia({video:isMobile?{facingMode:{ideal:'environment'}}:true});
-    video.srcObject=qrStream;
-    await video.play();
-    hint.textContent='Point camera at scenario QR code.';
-    const ctx=canvas.getContext('2d',{willReadFrequently:true});
-    const tick=()=>{
-      if(video.readyState>=2){
-        canvas.width=video.videoWidth;
-        canvas.height=video.videoHeight;
-        ctx.drawImage(video,0,0);
-        const img=ctx.getImageData(0,0,canvas.width,canvas.height);
-        const code=window.jsQR?.(img.data,canvas.width,canvas.height);
-        if(code?.data){
-          loadScenarioFromEncodedUrl(code.data);
-          hint.textContent='Scenario loaded!';
-          stopQrScanner();
-          return;
-        }
-      }
-      qrLoopId=requestAnimationFrame(tick);
-    };
-    tick();
-  }catch{
-    hint.textContent='Camera access failed. Use Import JSON.';
-  }
-}
-function stopQrScanner(){if(qrLoopId) cancelAnimationFrame(qrLoopId); qrLoopId=null; if(qrStream){qrStream.getTracks().forEach(t=>t.stop()); qrStream=null;}}
-function loadScenarioFromEncodedUrl(url){try{const u=new URL(url,location.origin); const val=u.searchParams.get('scenario'); if(!val) return; const obj=decodeScenario(decodeURIComponent(val)); if(obj?.params){state.params={...state.params,...obj.params}; onParamsChanged(true);}}catch{}}
-
+const QR_SCANNER_CONFIGS={scenario:{area:'#qrScannerArea',hint:'#qrScannerHint',video:'#qrVideo',canvas:'#qrCanvas'},share:{area:'#shareScannerArea',hint:'#shareScannerHint',video:'#shareQrVideo',canvas:'#shareQrCanvas'}};
+const QR_SCANNER_HINTS={initial:'Allow camera access and point at a Macrow scenario QR code.',requesting:'Requesting camera access…',scanning:'Point camera at scenario QR code.',permissionDenied:'Camera access blocked. Enable permissions or import JSON instead.',notFound:'No compatible camera found. Try another device or import JSON instead.',unavailable:'Camera unavailable. Try again later or import JSON.',invalidCode:'Scanned QR not recognized. Point at a Macrow scenario QR code.',success:'Scenario loaded from QR!'};
+const QR_PERMISSION_ERRORS=new Set(['NotAllowedError','PermissionDeniedError']);
+const QR_NOT_FOUND_ERRORS=new Set(['NotFoundError','DevicesNotFoundError']);
+let qrStream=null,qrLoopId=null,activeQrScanner=null;
+function updateScannerHint(scanner,message){if(scanner?.hint)scanner.hint.textContent=message;}
+function handleScannerError(scanner,error){if(!scanner) return; const reason=error?.name; let hint=QR_SCANNER_HINTS.unavailable; let statusMsg='Unable to open camera. Try again or import JSON.'; if(reason&&QR_PERMISSION_ERRORS.has(reason)){hint=QR_SCANNER_HINTS.permissionDenied; statusMsg='Camera access was blocked. Enable permissions or import JSON.';} else if(reason&&QR_NOT_FOUND_ERRORS.has(reason)){hint=QR_SCANNER_HINTS.notFound; statusMsg='No compatible camera found. Try another device or import JSON.';} updateScannerHint(scanner,hint); showStatus(statusMsg,true,3200);}
+async function startQrScanner(target='scenario'){const config=QR_SCANNER_CONFIGS[target]; if(!config) return; const area=qs(config.area); const hint=qs(config.hint); const video=qs(config.video); const canvas=qs(config.canvas); if(!area||!hint||!video||!canvas) return; stopQrScanner(); area.classList.remove('hidden'); activeQrScanner={target,area,hint,video,canvas}; updateScannerHint(activeQrScanner,QR_SCANNER_HINTS.requesting); if(!navigator.mediaDevices?.getUserMedia){ handleScannerError(activeQrScanner,{name:'NotSupportedError',message:'Media capture unavailable'}); return;} try{ await ensureQrLibs(); const isMobile=window.matchMedia('(pointer:coarse)').matches; const constraints={video:isMobile?{facingMode:{ideal:'environment'}}:true}; qrStream=await navigator.mediaDevices.getUserMedia(constraints); if(!activeQrScanner||activeQrScanner.target!==target){ stopQrScanner(target); return;} video.srcObject=qrStream; await video.play(); updateScannerHint(activeQrScanner,QR_SCANNER_HINTS.scanning); const ctx=canvas.getContext('2d',{willReadFrequently:true}); if(!ctx) throw new Error('Unable to capture video frame'); const scanFrame=()=>{ if(!activeQrScanner||activeQrScanner.target!==target) return; if(video.readyState>=2){ const width=video.videoWidth||video.clientWidth||640; const height=video.videoHeight||video.clientHeight||480; canvas.width=width; canvas.height=height; ctx.drawImage(video,0,0,width,height); const img=ctx.getImageData(0,0,width,height); const code=window.jsQR?.(img.data,width,height); if(code?.data){ const loaded=loadScenarioFromEncodedUrl(code.data); if(loaded){ updateScannerHint(activeQrScanner,QR_SCANNER_HINTS.success); showStatus('Scenario loaded from QR code.',false,2600); stopQrScanner(target); return;} const hintEl=activeQrScanner?.hint; updateScannerHint(activeQrScanner,QR_SCANNER_HINTS.invalidCode); if(hintEl) setTimeout(()=>{ if(hintEl.textContent===QR_SCANNER_HINTS.invalidCode) hintEl.textContent=QR_SCANNER_HINTS.scanning; },1600); } } qrLoopId=requestAnimationFrame(scanFrame); }; scanFrame(); }catch(error){ console.warn('QR scanner failed',error); handleScannerError(activeQrScanner,error);} }
+function stopQrScanner(target){if(qrLoopId) cancelAnimationFrame(qrLoopId); qrLoopId=null; if(qrStream){qrStream.getTracks().forEach(t=>t.stop()); qrStream=null;} const key=target||activeQrScanner?.target; if(key){ const config=QR_SCANNER_CONFIGS[key]; if(config){ const area=qs(config.area); const video=qs(config.video); const canvas=qs(config.canvas); const hint=qs(config.hint); if(area) area.classList.add('hidden'); if(video){ video.pause(); video.srcObject=null;} if(hint) hint.textContent=QR_SCANNER_HINTS.initial; if(canvas){ canvas.width=0; canvas.height=0;} }} if(!target||target===activeQrScanner?.target){ activeQrScanner=null;} }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) stopQrScanner(); });
 function addSwipeAdjust(el,step){let sx=null; el.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true}); el.addEventListener('touchmove',e=>{if(sx==null)return; const dx=e.touches[0].clientX-sx; if(Math.abs(dx)>18){const next=Number(el.value)+(dx>0?1:-1)*Number(step||1); el.value=clamp(next,Number(el.min),Number(el.max)); el.dispatchEvent(new Event('input')); sx=e.touches[0].clientX;}},{passive:true});}
 
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click(); if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click(); if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();} if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();} if(e.key==='p')setTab('policies'); if(e.key==='r')setTab('parameters'); if(e.key==='l')setTab('learn'); if(e.key==='q'&&settings.assessEnabled)setTab('assess'); if(e.key==='a')setTab('about'); if(e.key==='t')setTab('teacher'); if(e.key==='s')qs('#btnScenarios').click(); if(e.key==='x')qs('#btnReset').click();});
+const GRAPH_PINCH_SVG_SELECTORS = ['#chartSvg','#pcSvg','#moneyMarketSvg','#adComponentsSvg','#loanableFundsSvg','#circularFlowSvg','#adGraphSvg','#lreqSvg','#ppfSvg'];
+
+function attachPinchZoom(svg,{min=1,max=2.4}={}){
+  if(!svg) return;
+  if(svg.dataset.macrowPinchZoomInit==='1') return;
+  svg.dataset.macrowPinchZoomInit='1';
+
+  let zoom=1;
+  let translateX=0;
+  let translateY=0;
+  let startDistance=null;
+  let startZoom=1;
+  let panStartX=null;
+  let panStartY=null;
+  let startTranslateX=0;
+  let startTranslateY=0;
+
+  const clampZoom=value=>clamp(value,min,max);
+  const maxPan=(axisSize,currentZoom)=>Math.max(0,(axisSize*(currentZoom-1))/2);
+  const clampPan=()=>{
+    const bounds=svg.getBoundingClientRect();
+    const maxX=maxPan(bounds.width||1,zoom);
+    const maxY=maxPan(bounds.height||1,zoom);
+    translateX=clamp(translateX,-maxX,maxX);
+    translateY=clamp(translateY,-maxY,maxY);
+  };
+  const touchDistance=touches=>{
+    if(!touches||touches.length<2) return null;
+    const dx=touches[0].clientX-touches[1].clientX;
+    const dy=touches[0].clientY-touches[1].clientY;
+    return Math.hypot(dx,dy);
+  };
+  const applyTransform=()=>{
+    clampPan();
+    svg.style.transform=`translate(${translateX.toFixed(1)}px, ${translateY.toFixed(1)}px) scale(${zoom.toFixed(3)})`;
+    svg.style.transformOrigin='center center';
+    svg.style.transformBox='fill-box';
+  };
+  const applyZoom=next=>{
+    zoom=clampZoom(next);
+    if(zoom<=1.001){
+      translateX=0;
+      translateY=0;
+    }
+    applyTransform();
+  };
+  const resetPinchState=()=>{startDistance=null; startZoom=zoom;};
+  const resetPanState=()=>{panStartX=null; panStartY=null; startTranslateX=translateX; startTranslateY=translateY;};
+
+  const handlePinchStart=e=>{
+    if(e.touches.length===2){
+      startDistance=touchDistance(e.touches);
+      startZoom=zoom;
+      resetPanState();
+    }else if(e.touches.length===1&&zoom>1.001){
+      panStartX=e.touches[0].clientX;
+      panStartY=e.touches[0].clientY;
+      startTranslateX=translateX;
+      startTranslateY=translateY;
+    }
+  };
+
+  const handlePinchMove=e=>{
+    if(e.touches.length===2&&startDistance!=null){
+      const nextDistance=touchDistance(e.touches);
+      if(!nextDistance) return;
+      applyZoom(startZoom*(nextDistance/startDistance));
+      if(e.cancelable) e.preventDefault();
+      return;
+    }
+    if(e.touches.length===1&&zoom>1.001&&panStartX!=null&&panStartY!=null){
+      const dx=e.touches[0].clientX-panStartX;
+      const dy=e.touches[0].clientY-panStartY;
+      translateX=startTranslateX+dx;
+      translateY=startTranslateY+dy;
+      applyTransform();
+      if(e.cancelable) e.preventDefault();
+    }
+  };
+
+  const handlePinchEnd=e=>{
+    if(e.touches.length<2) resetPinchState();
+    if(e.touches.length===0||zoom<=1.001) resetPanState();
+    if(e.touches.length===1&&zoom>1.001){
+      panStartX=e.touches[0].clientX;
+      panStartY=e.touches[0].clientY;
+      startTranslateX=translateX;
+      startTranslateY=translateY;
+    }
+  };
+
+  svg.addEventListener('touchstart',handlePinchStart,{passive:true});
+  svg.addEventListener('touchmove',handlePinchMove,{passive:false});
+  svg.addEventListener('touchend',handlePinchEnd,{passive:true});
+  svg.addEventListener('touchcancel',()=>{resetPinchState(); resetPanState();},{passive:true});
+  svg.addEventListener('dblclick',()=>{zoom=1; translateX=0; translateY=0; applyTransform(); resetPinchState(); resetPanState();});
+}
+
+function initChartPinchZoom(){
+  GRAPH_PINCH_SVG_SELECTORS.forEach(selector=>attachPinchZoom(qs(selector)));
+}
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(authOverlay&&!authOverlay.classList.contains('hidden')){
+      closeAuthOverlay();
+      return;
+    }
+    if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click();
+    if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click();
+    if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();
+  }
+  if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();}
+  if(e.key==='p')setTab('policies');
+  if(e.key==='r')setTab('parameters');
+  if(e.key==='l')setTab('learn');
+  if(e.key==='q'&&settings.assessEnabled)setTab('assess');
+  if(e.key==='a')setTab('about');
+  if(e.key==='t')setTab('teacher');
+  if(e.key==='s')qs('#btnScenarios').click();
+  if(e.key==='x')qs('#btnReset').click();
+});
 
 function applyScenarioFromUrl(){
   applyStateParamsFromUrl();
-  const s=new URLSearchParams(location.search).get('scenario');
-  if(s){
-    try{
-      const obj=decodeScenario(decodeURIComponent(s));
-      if(obj.params){state.params={...state.params,...obj.params};}
-    }catch{}
+  const payload=parseScenarioPayloadFromUrl(location.href);
+  if(payload?.params){
+    state.params={...state.params,...payload.params};
   }
 }
 
@@ -1495,6 +3244,34 @@ async function exportChartPng() {
     showStatus('Graph export failed. Try again.', true);
   }
 }
+
+function exportSvgFile(svg, filePrefix='macrow-ad-as') {
+  if(!svg) throw new Error('SVG element not available for export.');
+  const clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const {width,height}=getSvgExportDimensions(svg);
+  clone.setAttribute('width',String(width));
+  clone.setAttribute('height',String(height));
+  if(!clone.hasAttribute('viewBox')) clone.setAttribute('viewBox',`0 0 ${width} ${height}`);
+  const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');
+  anchor.href=url;
+  anchor.download=`${filePrefix}-${Date.now()}.svg`;
+  anchor.click();
+  setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+
+function exportChartSvg(){
+  try{
+    exportSvgFile(qs('#chartSvg'),'macrow-ad-as');
+    showStatus('Graph exported as SVG');
+  }catch(error){
+    console.error(error);
+    showStatus('SVG export failed. Try again.',true);
+  }
+}
+
 async function exportPhillipsCurvePng() {
   try {
     await exportSvgAsPng(qs('#pcSvg'), {filePrefix: 'macrow-phillips-curve', backgroundColor: '#0b1220'});
@@ -1514,6 +3291,16 @@ async function exportMoneyMarketPng() {
   }
 }
 
+async function exportCircularFlowPng(){
+  try{
+    await exportSvgAsPng(qs('#circularFlowSvg'),{filePrefix:'macrow-circular-flow',backgroundColor:'#0b1220'});
+    showStatus('Circular flow diagram exported as PNG');
+  }catch(error){
+    console.error(error);
+    showStatus('Circular flow export failed. Try again.',true);
+  }
+}
+
 function rect(svg,x,y,w,h,r,f){const el=document.createElementNS('http://www.w3.org/2000/svg','rect'); [['x',x],['y',y],['width',w],['height',h],['rx',r],['fill',f]].forEach(([k,v])=>el.setAttribute(k,v)); svg.appendChild(el);} 
 function line(svg,x1,y1,x2,y2,s,w,d){const el=document.createElementNS('http://www.w3.org/2000/svg','line'); [['x1',x1],['y1',y1],['x2',x2],['y2',y2],['stroke',s],['stroke-width',w],['stroke-linecap','round']].forEach(([k,v])=>el.setAttribute(k,v)); if(d)el.setAttribute('stroke-dasharray',d); svg.appendChild(el);} 
 function text(svg,x,y,s,a,f,z,b=false){const el=document.createElementNS('http://www.w3.org/2000/svg','text'); [['x',x],['y',y],['text-anchor',a],['fill',f],['font-size',z],['font-family','ui-sans-serif']].forEach(([k,v])=>el.setAttribute(k,v)); if(b)el.setAttribute('font-weight','900'); el.textContent=s; svg.appendChild(el);} 
@@ -1530,7 +3317,7 @@ function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.y
 
 function showWelcomeIfNeeded(){
   const k='macrow_welcome_dismissed_v7';
-  if(localStorage.getItem(k)==='1') return;
+  if(storageGet(k)==='1') return;
   const ov=qs('#welcomeOverlay');
   const intro=ov?.querySelector('.welcomeIntro');
   const grid=ov?.querySelector('.welcomeGrid');
@@ -1561,7 +3348,7 @@ function showWelcomeIfNeeded(){
   };
 
   const close=(save=false)=>{
-    if(save||qs('#welcomeDontShow')?.checked) localStorage.setItem(k,'1');
+    if(save||qs('#welcomeDontShow')?.checked) storageSet(k,'1');
     clearSpotlight();
     ov.classList.add('hidden');
     ov.setAttribute('aria-hidden','true');
@@ -1578,8 +3365,14 @@ function showWelcomeIfNeeded(){
 }
 
 function initResilience(){
-  window.addEventListener('error',()=>showStatus('Something went wrong. Try reset or reload.',true,5000));
-  window.addEventListener('unhandledrejection',()=>showStatus('Network/action failed. Please retry.',true,5000));
+  window.addEventListener('error',event=>{
+    if(!shouldReportResilienceError()) return;
+    showStatus('Something went wrong. Try reset or reload.',true,5000);
+  });
+  window.addEventListener('unhandledrejection',event=>{
+    if(!shouldReportResilienceError()) return;
+    showStatus('Network/action failed. Please retry.',true,5000);
+  });
 }
 
 function initPerformanceMonitoring(){
@@ -1600,6 +3393,8 @@ function init(){
   initResilience();
   initPerformanceMonitoring();
   initThemeToggle();
+  initAuthControls();
+  updateAuthStatusUI();
   document.body.classList.toggle('accessibility-mode',settings.accessibility);
   renderPoliciesPanel();
   renderParametersPanel();
@@ -1608,10 +3403,11 @@ function init(){
   renderTeacherPanel();
   initScenarioManager();
   initShareTools();
+  initChartPinchZoom();
   syncAssessAvailability();
   setTab('policies');
   showWelcomeIfNeeded();
   applyScenarioFromUrl();
-  onParamsChanged(true);
+  onDocumentReady(()=>onParamsChanged(true));
 }
 init();

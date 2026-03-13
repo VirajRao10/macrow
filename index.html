@@ -28,6 +28,18 @@
         <div class="brand__tag">IB Keynesian AD–AS, simplified and interactive</div>
       </div>
     </div>
+    <div class="topbar__actions">
+      <a class="btn btn--ghost" href="./marketing.html">Why macrow</a>
+      <div class="topbar__auth">
+        <span id="authStatus" class="authStatus">Guest</span>
+        <button id="btnAuthOpen" class="btn btn--ghost">Sign in</button>
+        <button id="btnAuthSignOut" class="btn btn--ghost hidden">Sign out</button>
+      </div>
+      <button id="themeToggle" class="iconBtn themeToggle" type="button" aria-pressed="true" aria-label="Switch to light mode">
+        <span class="themeToggle__icon" aria-hidden="true">🌙</span>
+        <span class="themeToggle__label">Dark theme</span>
+      </button>
+    </div>
   </header>
 
   <main class="shell">
@@ -85,6 +97,7 @@
             </label>
 
             <button id="btnExportPng" class="btn btn--ghost">Export graph (PNG)</button>
+            <button id="btnExportSvg" class="btn btn--ghost">Export graph (SVG)</button>
           </div>
 
           <div class="quickActions" aria-label="Scenario quick actions">
@@ -119,9 +132,21 @@
             <div class="sharePanel__controls">
               <button id="btnShareLinkPanel" class="btn btn--primary" type="button">Copy share link</button>
               <button id="btnShowShareQrPanel" class="btn btn--ghost" type="button">View QR code</button>
+              <button id="btnShareScanQr" class="btn btn--ghost" type="button">Scan QR code</button>
             </div>
             <div id="shareLinkPreview" class="sharePanel__link hidden" tabindex="0" role="status"></div>
             <div id="shareQrPreview" class="sharePreview hidden"></div>
+            <div id="shareScannerArea" class="shareScanner hidden" aria-live="polite">
+              <div class="shareScanner__header">
+                <div class="shareScanner__title">Load scenario from QR</div>
+              </div>
+              <video id="shareQrVideo" playsinline muted autoplay></video>
+              <canvas id="shareQrCanvas" class="hidden shareScanner__canvas"></canvas>
+              <div id="shareScannerHint" class="sectionHint shareScanner__hint">Allow camera access and point at a Macrow scenario QR code.</div>
+              <div class="shareScanner__actions">
+                <button id="btnShareScannerStop" class="btn btn--ghost btn--mini" type="button">Stop scanning</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -136,22 +161,24 @@
           </div>
         </div>
 
-        <div id="panelPolicies"></div>
-        <div id="panelParameters" class="hidden"></div>
-        <div id="panelLearn" class="hidden"></div>
-        <div id="panelAssess" class="hidden"></div>
-        <div id="panelAbout" class="hidden"></div>
+        <div id="panelPolicies" role="tabpanel" aria-labelledby="navPoliciesTab"></div>
+        <div id="panelParameters" class="hidden" role="tabpanel" aria-labelledby="navParametersTab"></div>
+        <div id="panelLearn" class="hidden" role="tabpanel" aria-labelledby="navLearnTab"></div>
+        <div id="panelAssess" class="hidden" role="tabpanel" aria-labelledby="navAssessTab"></div>
+        <div id="panelTeacher" class="hidden" role="tabpanel" aria-labelledby="navTeacherTab"></div>
+        <div id="panelAbout" class="hidden" role="tabpanel" aria-labelledby="navAboutTab"></div>
       </aside>
     </section>
   </main>
 
   <!-- Bottom nav -->
-  <nav class="bottomNav" aria-label="Tabs">
-    <button class="navBtn navBtn--active" data-tab="policies"><span class="navIcon">📘</span><span class="navText">Policies</span></button>
-    <button class="navBtn" data-tab="parameters"><span class="navIcon">🎛️</span><span class="navText">Parameters</span></button>
-    <button class="navBtn" data-tab="learn"><span class="navIcon">🎓</span><span class="navText">Learn</span></button>
-    <button class="navBtn hidden" data-tab="assess"><span class="navIcon">🧪</span><span class="navText">Assess</span></button>
-    <button class="navBtn" data-tab="about"><span class="navIcon">ℹ️</span><span class="navText">About</span></button>
+  <nav class="bottomNav" aria-label="Primary navigation tabs" role="tablist">
+    <button id="navPoliciesTab" class="navBtn navBtn--active" data-tab="policies" role="tab" aria-controls="panelPolicies" aria-selected="true" tabindex="0"><span class="navIcon">📘</span><span class="navText">Policies</span></button>
+    <button id="navParametersTab" class="navBtn" data-tab="parameters" role="tab" aria-controls="panelParameters" aria-selected="false" tabindex="-1"><span class="navIcon">🎛️</span><span class="navText">Parameters</span></button>
+    <button id="navLearnTab" class="navBtn" data-tab="learn" role="tab" aria-controls="panelLearn" aria-selected="false" tabindex="-1"><span class="navIcon">🎓</span><span class="navText">Learn</span></button>
+    <button id="navAssessTab" class="navBtn hidden" data-tab="assess" role="tab" aria-controls="panelAssess" aria-selected="false" tabindex="-1" aria-hidden="true"><span class="navIcon">🧪</span><span class="navText">Assess</span></button>
+    <button id="navAboutTab" class="navBtn" data-tab="about" role="tab" aria-controls="panelAbout" aria-selected="false" tabindex="-1"><span class="navIcon">ℹ️</span><span class="navText">About</span></button>
+    <button id="navTeacherTab" class="navBtn" data-tab="teacher" role="tab" aria-controls="panelTeacher" aria-selected="false" tabindex="-1"><span class="navIcon">🍎</span><span class="navText">Teacher</span></button>
   </nav>
 
   <!-- Welcome page -->
@@ -163,7 +190,7 @@
           <div>
             <div id="welcomeTitle" class="modalTitle">Welcome to macrow by Viraj!</div>
             <div style="margin-top:2px; font-size:12px; color: rgba(148,163,184,0.75); font-weight:700;">
-              Simplified Macro(w)economic simulator for IB macroeconomic policy on the Keynesian AD/AS diagram. Currently a prototype!
+              Simplified macroeconomic simulator for IB macroeconomic policy on the Keynesian AD/AS diagram.
             </div>
           </div>
         </div>
@@ -172,7 +199,7 @@
 
       <div class="modalBody">
         <div class="welcomeIntro">
-          Macrow is as tool created to empower students with a deep understanding of Macro(w)economics ;).
+          Macrow is a tool created to empower students with a deep understanding of Macro(w)economics.
         </div>
 
         <div class="welcomeGrid">
@@ -223,7 +250,46 @@
           </select>
           <button id="btnSaveScenario" class="btn btn--primary">Save current</button>
         </div>
-        <div id="scenarioListRoot" class="scenarioList" aria-live="polite"></div>
+        <div class="scenarioCompare" id="scenarioCompareSection">
+          <div class="sectionTitle">Scenario comparison</div>
+          <div class="sectionHint">Compare two saved states side by side to spot policy differences.</div>
+          <div class="scenarioCompare__controls">
+            <label class="scenarioCompare__control">
+              <span>Scenario A</span>
+              <select id="scenarioCompareLeft" class="textInput" aria-label="Scenario A selection"></select>
+            </label>
+            <label class="scenarioCompare__control">
+              <span>Scenario B</span>
+              <select id="scenarioCompareRight" class="textInput" aria-label="Scenario B selection"></select>
+            </label>
+            <button id="scenarioCompareSwap" class="btn btn--ghost btn--mini" type="button">Swap sides</button>
+          </div>
+          <div class="scenarioCompare__grid">
+            <div id="scenarioCompareLeftCard" class="scenarioCompare__card"></div>
+            <div id="scenarioCompareRightCard" class="scenarioCompare__card"></div>
+          </div>
+          <div id="scenarioCompareDiff" class="scenarioCompare__diff"></div>
+        </div>
+        <div class="scenarioFilters">
+          <label class="toggle toggle--compact">
+            <input id="toggleScenarioFavorites" type="checkbox" />
+            <span>Favorites only</span>
+          </label>
+          <span class="sectionHint" style="margin:0;">Star scenarios to bookmark them for quick reuse.</span>
+        </div>
+        <div id="scenarioListRoot" aria-live="polite"></div>
+        <div id="scenarioComments" class="scenarioComments">
+          <div class="scenarioComments__header">
+            <div>
+              <div class="sectionTitle">Scenario comments</div>
+              <div class="sectionHint">Save or load a scenario to unlock comment history.</div>
+            </div>
+            <div id="scenarioCommentsStatus" class="sectionHint scenarioComments__status"></div>
+          </div>
+          <div id="scenarioCommentList" class="scenarioComments__list"></div>
+          <textarea id="scenarioCommentInput" class="textInput" rows="3" placeholder="Save or load a scenario to add a comment"></textarea>
+          <button id="btnAddScenarioComment" class="btn btn--primary btn--full">Add comment</button>
+        </div>
         <div class="scenarioToolbar scenarioActions">
           <button id="btnExportJson" class="btn btn--ghost">Export JSON</button>
           <label class="btn btn--ghost" for="scenarioImportFile">Import JSON</label>
@@ -246,6 +312,48 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
       <div class="modalHeader"><div id="shortcutsTitle" class="modalTitle">Keyboard shortcuts</div><button id="shortcutsClose" class="iconBtn" aria-label="Close keyboard shortcuts">✕</button></div>
       <div id="shortcutsList" class="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="authOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="modal authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <div class="modalHeader">
+        <div id="authTitle" class="modalTitle">Access macrow</div>
+        <button id="authClose" class="iconBtn" aria-label="Close authentication panel">✕</button>
+      </div>
+      <div class="modalBody">
+        <div class="authTabs" role="tablist">
+          <button type="button" class="authTab" data-auth-mode="login">Sign in</button>
+          <button type="button" class="authTab" data-auth-mode="register">Create account</button>
+        </div>
+        <form id="authForm" class="authForm">
+          <label class="authField">
+            <span class="authField__label">Username</span>
+            <input id="authUsername" class="textInput" type="text" name="username" autocomplete="username" required />
+          </label>
+          <label class="authField">
+            <span class="authField__label">Password</span>
+            <input id="authPassword" class="textInput" type="password" name="password" autocomplete="current-password" required minlength="6" />
+          </label>
+          <label class="authField authField--register hidden">
+            <span class="authField__label">Display name</span>
+            <input id="authDisplayName" class="textInput" type="text" name="displayName" placeholder="Optional" />
+          </label>
+          <label class="authField authField--register hidden">
+            <span class="authField__label">Role</span>
+            <select id="authRole" class="textInput">
+              <option value="teacher">Teacher (dashboard access)</option>
+              <option value="student">Student (personal progress)</option>
+            </select>
+          </label>
+          <div id="authMessage" class="authMessage" role="status" aria-live="polite"></div>
+          <button id="authSubmit" class="btn btn--primary" type="submit">Sign in</button>
+          <div class="authFooter">
+            <small id="authFooterHint">Sign in to open the teacher dashboard.</small>
+            <button type="button" id="authSwitchMode" class="btn btn--ghost btn--mini">Need an account?</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 

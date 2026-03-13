@@ -14,6 +14,68 @@ const SHIFT_QUESTION_BANK = [
     answer: 'LRAS shifts right',
     competency: 'AD-AS Foundations',
     explanation: 'Productivity raises potential output, so long-run productive capacity expands and LRAS shifts right.'
+  },
+  {
+    id: 'shift_ad_left_tightening',
+    prompt: 'The central bank sharply raises interest rates to cool inflation. In the short run, which AD-AS shift is most likely?',
+    options: ['AD shifts left', 'AD shifts right', 'SRAS shifts right', 'LRAS shifts left'],
+    answer: 'AD shifts left',
+    competency: 'Policy Analysis',
+    explanation: 'Higher interest rates reduce consumption and investment demand, shifting AD left in the short run.'
+  },
+  {
+    id: 'shift_sras_right_supply_reform',
+    prompt: 'A government cuts payroll taxes and streamlines logistics, reducing unit production costs economy-wide. Which shift best fits?',
+    options: ['SRAS shifts right', 'AD shifts left', 'LRAS shifts left', 'No shift occurs'],
+    answer: 'SRAS shifts right',
+    competency: 'Evaluation',
+    explanation: 'Lower per-unit costs increase profitable output at each price level, which shifts SRAS right.'
+  }
+];
+
+const INFLATION_PHILLIPS_BANK = [
+  {
+    id: 'pc_move_along',
+    prompt: 'Demand rises above potential output in the short run. What is most likely on the Phillips Curve?',
+    options: ['Movement up along SRPC: lower unemployment, higher inflation', 'Movement down along SRPC: higher unemployment, lower inflation', 'LRPC shifts right immediately', 'No change in inflation or unemployment'],
+    answer: 'Movement up along SRPC: lower unemployment, higher inflation',
+    competency: 'Policy Analysis',
+    explanation: 'Stronger demand tightens labour markets, reducing unemployment while raising inflation pressure along the SRPC.'
+  },
+  {
+    id: 'pc_expectations_shift',
+    prompt: 'After several years of high inflation expectations, what Phillips Curve change is most likely?',
+    options: ['SRPC shifts upward', 'SRPC shifts downward', 'LRPC shifts left permanently', 'No curve can shift'],
+    answer: 'SRPC shifts upward',
+    competency: 'Evaluation',
+    explanation: 'Higher expected inflation can shift the short-run Phillips Curve up, worsening inflation at each unemployment rate.'
+  },
+  {
+    id: 'inflation_policy_mix',
+    prompt: 'Inflation is above target while output is near potential. Which macro mix is most consistent?',
+    options: ['Contractionary monetary policy and cautious fiscal stance', 'Expansionary fiscal + expansionary monetary policy', 'Large subsidy to boost AD immediately', 'No policy response is needed'],
+    answer: 'Contractionary monetary policy and cautious fiscal stance',
+    competency: 'Evaluation',
+    explanation: 'When inflation is the main gap, tighter demand policy is usually preferred to cool price pressure.'
+  }
+];
+
+const FALLBACK_QUESTION_BANK = [
+  {
+    id: 'fallback_output_gap',
+    prompt: 'If actual output is below potential output, what condition best describes the economy?',
+    options: ['Recessionary gap', 'Inflationary gap', 'Full-employment equilibrium', 'Hyperinflation trap'],
+    answer: 'Recessionary gap',
+    competency: 'AD-AS Foundations',
+    explanation: 'Output below potential usually indicates a recessionary gap and spare capacity.'
+  },
+  {
+    id: 'fallback_policy_tradeoff',
+    prompt: 'Why is macro policy evaluation important in exams?',
+    options: ['Because policies involve trade-offs over time', 'Because one policy always solves every issue', 'Because diagrams replace analysis', 'Because assumptions are never needed'],
+    answer: 'Because policies involve trade-offs over time',
+    competency: 'Evaluation',
+    explanation: 'High-quality macro answers explain short-run gains, long-run costs, and uncertainty.'
   }
 ];
 
@@ -34,7 +96,30 @@ export function buildQuizQuestions(glossary, rng = Math.random) {
   });
 
   const shiftedBank = shuffle([...SHIFT_QUESTION_BANK], rng);
-  const combined = shuffle([...shiftedBank, ...glossaryQuestions], rng).slice(0, 10);
+  const inflationPhillips = sampleWithoutReplacement(INFLATION_PHILLIPS_BANK, Math.min(2, INFLATION_PHILLIPS_BANK.length), rng);
+  const combinedPool = [...inflationPhillips, ...shiftedBank, ...glossaryQuestions];
+  const remaining = shuffle(combinedPool.slice(inflationPhillips.length), rng).slice(0, Math.max(0, 10 - inflationPhillips.length));
+  let combined = shuffle([...inflationPhillips, ...remaining], rng).slice(0, 10);
+
+  const lrasQuestion = SHIFT_QUESTION_BANK.find(q => q.id === 'shift_lras_right');
+  if (lrasQuestion) {
+    const hasLras = combined.some(q => /LRAS/i.test(`${q.prompt} ${q.answer}`));
+    if (!hasLras) {
+      combined[combined.length - 1] = {
+        ...lrasQuestion,
+        id: `${lrasQuestion.id}_forced`
+      };
+    }
+  }
+
+  if (combined.length < 10) {
+    const fallback = shuffle([...FALLBACK_QUESTION_BANK], rng);
+    while (combined.length < 10) {
+      const next = fallback[combined.length % fallback.length];
+      combined.push({ ...next, id: `${next.id}_${combined.length + 1}` });
+    }
+  }
+
   return combined.map((q, i) => ({ ...q, id: q.id || `q_${i + 1}` }));
 }
 

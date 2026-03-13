@@ -35,4 +35,16 @@ describe('assessment generators', () => {
     expect(combinedText).toMatch(/SRAS/i);
     expect(combinedText).toMatch(/LRAS/i);
   });
+
+  it('handles empty glossary by returning stable fallback quiz items', () => {
+    const questions = buildQuizQuestions([], () => 0.1);
+    expect(questions).toHaveLength(10);
+    expect(questions.every(q => q.options.length === 4)).toBe(true);
+    expect(questions.every(q => q.options.includes(q.answer))).toBe(true);
+  });
+
+  it('handles empty practice concepts without crashing', () => {
+    const practice = buildPracticeFromConcepts([], () => 0.5);
+    expect(practice).toHaveLength(0);
+  });
 });
