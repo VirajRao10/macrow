@@ -88,6 +88,14 @@
         </button>
       </li>
       <li>
+        <button class="navBtn" data-nav="recall" type="button">
+          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10"/><path d="M7 13h7"/>
+          </svg>
+          <span>Active Recall</span>
+        </button>
+      </li>
+      <li>
         <button class="navBtn" data-nav="glossary" type="button">
           <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>
@@ -179,6 +187,29 @@
         </div>
         <h2 class="sectionHeading">Lessons</h2>
         <ol class="lessonList" id="lessonList"></ol>
+
+        <div class="moduleQuizCta card" id="moduleQuizCta">
+          <div class="moduleQuizCta__body">
+            <div class="moduleQuizCta__eyebrow">End-of-section practice</div>
+            <div class="moduleQuizCta__title" id="moduleQuizCtaTitle">Quiz · 7 questions</div>
+            <div class="moduleQuizCta__sub" id="moduleQuizCtaSub">Multiple choice, true/false, and short answer. Self-mark short answers against the model.</div>
+          </div>
+          <button class="btn btn--primary" type="button" id="btnStartModuleQuiz">Start quiz</button>
+        </div>
+      </div>
+
+      <!-- QUIZ OVERLAY (modal-style, scoped to the course view) -->
+      <div id="moduleQuizOverlay" class="overlay hidden" aria-hidden="true" role="dialog" aria-labelledby="moduleQuizTitle">
+        <div class="modal modal--wide">
+          <div class="modalHeader">
+            <div>
+              <div class="modalEyebrow" id="moduleQuizEyebrow">Module quiz</div>
+              <div class="modalTitle" id="moduleQuizTitle">—</div>
+            </div>
+            <button class="iconBtn" type="button" id="moduleQuizClose" aria-label="Close quiz">✕</button>
+          </div>
+          <div class="modalBody" id="moduleQuizBody"></div>
+        </div>
       </div>
     </section>
 
@@ -374,9 +405,57 @@
               <li><kbd>g</kbd> then <kbd>c</kbd> Open Course</li>
               <li><kbd>g</kbd> then <kbd>s</kbd> Open Simulator</li>
               <li><kbd>g</kbd> then <kbd>g</kbd> Open Glossary</li>
+              <li><kbd>g</kbd> then <kbd>r</kbd> Active Recall</li>
               <li><kbd>?</kbd> All shortcuts</li>
             </ul>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACTIVE RECALL -->
+    <section class="view view--recall" data-view="recall" hidden>
+      <div class="page page--wide">
+        <p class="page__eyebrow">Active Recall</p>
+        <h1 class="page__title">Flashcard sets by unit</h1>
+        <p class="page__lede">Export a flashcard deck for any unit of the syllabus. Each card has a term on the front and a definition on the back — import it into your favourite spaced-repetition app.</p>
+
+        <div class="recallLayout">
+          <aside class="card recallList" aria-label="Units">
+            <div class="recallList__title">Decks</div>
+            <ul id="recallDeckList" class="recallDeckList" role="list"></ul>
+          </aside>
+
+          <section class="card recallPanel" aria-label="Deck details">
+            <div class="recallPanel__head">
+              <div>
+                <div class="recallPanel__eyebrow" id="recallDeckEyebrow">Select a deck</div>
+                <h2 class="recallPanel__title" id="recallDeckTitle">—</h2>
+                <div class="recallPanel__meta" id="recallDeckMeta">—</div>
+              </div>
+              <div class="recallPanel__actions">
+                <button class="btn btn--primary" type="button" id="recallDownloadCsv" disabled>Download CSV</button>
+                <button class="btn btn--ghost" type="button" id="recallDownloadTsv" disabled>TSV (Anki)</button>
+                <button class="btn btn--ghost" type="button" id="recallDownloadJson" disabled>JSON</button>
+                <button class="btn btn--ghost" type="button" id="recallCopyMarkdown" disabled>Copy Markdown</button>
+                <button class="btn btn--ghost" type="button" id="recallOpenQuizlet" disabled>Open in Quizlet</button>
+              </div>
+            </div>
+
+            <div class="recallPanel__body">
+              <p class="recallPanel__hint" id="recallHint">Each card is a term and its definition. Cards are grouped by the syllabus unit where the term is first introduced.</p>
+
+              <div class="recallPreviewHeader">
+                <div class="recallPreviewHeader__label">Preview</div>
+                <div class="recallPreviewHeader__count" id="recallPreviewCount">0 cards</div>
+              </div>
+              <ol class="recallPreview" id="recallPreview"></ol>
+            </div>
+
+            <div class="recallPanel__footer">
+              <div class="recallPanel__footer__note">Quizlet integration — <b>coming soon</b>. We're adding deep links so you can drop a deck into a Quizlet folder in one click.</div>
+            </div>
+          </section>
         </div>
       </div>
     </section>

@@ -5,541 +5,974 @@
 
 export const COURSE = [
   {
-    id: '3.1',
-    code: '3.1',
-    title: 'Measuring economic activity',
-    blurb: 'How we count what an economy produces, and why the headcount is more than a number.',
-    outcomes: [
-      'Explain the equivalence of income, output and expenditure approaches using the circular flow.',
-      'Distinguish nominal from real GDP and GNI, and calculate real values using a price deflator.',
-      'Discuss the appropriateness of GDP/GNI for measuring well-being, with reference to alternative indices.',
+    "id": "3.1",
+    "code": "3.1",
+    "title": "Measuring economic activity",
+    "blurb": "How we count what an economy produces, and why the headcount is more than a number.",
+    "outcomes": [
+      "Explain the equivalence of income, output and expenditure approaches using the circular flow.",
+      "Distinguish nominal from real GDP and GNI, and calculate real values using a price deflator.",
+      "Discuss the appropriateness of GDP/GNI for measuring well-being, with reference to alternative indices."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.1.1',
-        title: 'The circular flow of income',
-        minutes: 8,
-        body: [
-          'The circular flow shows how money, goods and services move between households, firms, the government and the foreign sector.',
-          'Injections (investment, government spending, exports) add to the flow; leakages (saving, taxes, imports) drain it. In equilibrium injections equal leakages.',
-          'The three approaches to national income — output, income and expenditure — give the same total because every transaction is both a payment and a receipt.',
+        "id": "3.1.1",
+        "title": "The circular flow of income",
+        "minutes": 8,
+        "body": [
+          "The circular flow shows how money, goods and services move between households, firms, the government and the foreign sector.",
+          "Injections (investment, government spending, exports) add to the flow; leakages (saving, taxes, imports) drain it. In equilibrium injections equal leakages.",
+          "The three approaches to national income — output, income and expenditure — give the same total because every transaction is both a payment and a receipt."
         ],
-        diagram: 'circularFlow',
-        keyTerms: ['circular flow', 'injections', 'leakages', 'expenditure approach', 'income approach', 'output approach'],
+        "diagram": "circularFlow",
+        "keyTerms": [
+          "circular flow",
+          "injections",
+          "leakages",
+          "expenditure approach",
+          "income approach",
+          "output approach"
+        ],
+        "keyTakeaways": [
+          "National income is measured three ways (output, income, expenditure) and must give the same total by definition.",
+          "Real values strip out inflation; nominal values do not. Always compare using the same deflator year."
+        ]
       },
       {
-        id: '3.1.2',
-        title: 'GDP, GNI, and the difference between them',
-        minutes: 7,
-        body: [
-          'Gross Domestic Product (GDP) measures the total market value of all final goods and services produced within a country in a period.',
-          'Gross National Income (GNI) = GDP + net primary income from abroad (income residents earn overseas minus income foreigners earn domestically).',
-          'Both can be reported nominal (at current prices) or real (adjusted for inflation using a price deflator). Real values are what allow comparisons over time.',
+        "id": "3.1.2",
+        "title": "GDP, GNI, and the difference between them",
+        "minutes": 7,
+        "body": [
+          "Gross Domestic Product (GDP) measures the total market value of all final goods and services produced within a country in a period.",
+          "Gross National Income (GNI) = GDP + net primary income from abroad (income residents earn overseas minus income foreigners earn domestically).",
+          "Both can be reported nominal (at current prices) or real (adjusted for inflation using a price deflator). Real values are what allow comparisons over time."
         ],
-        formula: 'Real GDP = (Nominal GDP / Price deflator) × 100',
-        diagram: null,
-        keyTerms: ['GDP', 'GNI', 'price deflator', 'net primary income', 'final goods and services'],
+        "formula": "Real GDP = (Nominal GDP / Price deflator) × 100",
+        "diagram": null,
+        "keyTerms": [
+          "GDP",
+          "GNI",
+          "price deflator",
+          "net primary income",
+          "final goods and services"
+        ],
+        "keyTakeaways": [
+          "Real values strip out inflation; nominal values do not. Always compare using the same deflator year.",
+          "GDP per capita at PPP is the standard cross-country comparison, but it is silent on inequality, environment and unpaid work."
+        ],
+        "workedExample": {
+          "title": "Calculating real GDP from a deflator",
+          "scenario": "Nominal GDP in year 2 is $1,200 billion. The price deflator (year 1 = 100) is 120. What is real GDP?",
+          "steps": [
+            "Apply the deflator formula: Real GDP = (Nominal GDP / Deflator) × 100.",
+            "Plug in: Real GDP = (1,200 / 120) × 100."
+          ],
+          "answer": "Real GDP = 1,000 billion. Output grew in nominal terms but real output is unchanged — all of the increase was inflation."
+        },
+        "commonMistakes": [
+          "GNI is not the same as GDP. GNI = GDP + net primary income from abroad. For a country with lots of foreign investment (e.g. Ireland), GNI and GDP diverge sharply."
+        ]
       },
       {
-        id: '3.1.3',
-        title: 'Per capita measures and cross-country comparisons',
-        minutes: 6,
-        body: [
-          'Real GDP per capita = Real GDP / Population. Useful for comparing average living standards.',
-          'Purchasing Power Parity (PPP) adjusts for differences in price levels across countries, so a dollar buys the same bundle everywhere.',
-          'GDP/GNI per capita at PPP is the standard cross-country welfare comparison, but it still misses inequality, environment, and unpaid work.',
+        "id": "3.1.3",
+        "title": "Per capita measures and cross-country comparisons",
+        "minutes": 6,
+        "body": [
+          "Real GDP per capita = Real GDP / Population. Useful for comparing average living standards.",
+          "Purchasing Power Parity (PPP) adjusts for differences in price levels across countries, so a dollar buys the same bundle everywhere.",
+          "GDP/GNI per capita at PPP is the standard cross-country welfare comparison, but it still misses inequality, environment, and unpaid work."
         ],
-        diagram: null,
-        keyTerms: ['GDP per capita', 'purchasing power parity (PPP)'],
+        "diagram": null,
+        "keyTerms": [
+          "GDP per capita",
+          "purchasing power parity (PPP)"
+        ],
+        "keyTakeaways": [
+          "GDP per capita at PPP is the standard cross-country comparison, but it is silent on inequality, environment and unpaid work.",
+          "National income is measured three ways (output, income, expenditure) and must give the same total by definition."
+        ],
+        "workedExample": {
+          "title": "GDP per capita at PPP vs nominal",
+          "scenario": "Country A: nominal GDP per capita $20,000, price level 50% of the US. Country B: nominal GDP per capita $30,000, price level 100% of the US. Which is richer in real terms?",
+          "steps": [
+            "Convert each to PPP dollars by dividing nominal per capita by the country's price level (relative to the US).",
+            "Country A PPP per capita = 20,000 / 0.50 = $40,000.",
+            "Country B PPP per capita = 30,000 / 1.00 = $30,000."
+          ],
+          "answer": "Country A is richer in real terms ($40,000 vs $30,000 PPP). The lower price level stretches each dollar further."
+        }
       },
       {
-        id: '3.1.4',
-        title: 'The business cycle and potential output',
-        minutes: 9,
-        body: [
-          'Real GDP fluctuates around a long-term growth trend. The business cycle has four phases: expansion, peak, contraction (recession), trough.',
-          'Potential output (Yf) is the level of real GDP consistent with the natural rate of unemployment. The output gap is the difference between actual and potential output.',
-          'Recessionary gap: actual < potential. Inflationary gap: actual > potential (Keynesian view; some schools call this a positive output gap).',
+        "id": "3.1.4",
+        "title": "The business cycle and potential output",
+        "minutes": 9,
+        "body": [
+          "Real GDP fluctuates around a long-term growth trend. The business cycle has four phases: expansion, peak, contraction (recession), trough.",
+          "Potential output (Yf) is the level of real GDP consistent with the natural rate of unemployment. The output gap is the difference between actual and potential output.",
+          "Recessionary gap: actual < potential. Inflationary gap: actual > potential (Keynesian view; some schools call this a positive output gap)."
         ],
-        diagram: 'businessCycle',
-        keyTerms: ['business cycle', 'potential output', 'output gap', 'recession', 'expansion', 'peak', 'trough'],
+        "diagram": "businessCycle",
+        "keyTerms": [
+          "business cycle",
+          "potential output",
+          "output gap",
+          "recession",
+          "expansion",
+          "peak",
+          "trough"
+        ],
+        "keyTakeaways": [
+          "National income is measured three ways (output, income, expenditure) and must give the same total by definition.",
+          "Real values strip out inflation; nominal values do not. Always compare using the same deflator year."
+        ]
       },
       {
-        id: '3.1.5',
-        title: 'Beyond GDP — measuring well-being',
-        minutes: 6,
-        body: [
-          'GDP is a measure of output, not welfare. It ignores income distribution, non-market work, environmental damage, and quality of life.',
-          'Alternative indices: OECD Better Life Index (11 dimensions), UN Human Development Index, Happy Planet Index (life expectancy × well-being ÷ ecological footprint).',
-          'For exam answers: GDP is useful but limited; complement it with at least one alternative index when evaluating well-being.',
+        "id": "3.1.5",
+        "title": "Beyond GDP — measuring well-being",
+        "minutes": 6,
+        "body": [
+          "GDP is a measure of output, not welfare. It ignores income distribution, non-market work, environmental damage, and quality of life.",
+          "Alternative indices: OECD Better Life Index (11 dimensions), UN Human Development Index, Happy Planet Index (life expectancy × well-being ÷ ecological footprint).",
+          "For exam answers: GDP is useful but limited; complement it with at least one alternative index when evaluating well-being."
         ],
-        diagram: null,
-        keyTerms: ['OECD Better Life Index', 'Human Development Index (HDI)', 'Happy Planet Index'],
-      },
-    ],
+        "diagram": null,
+        "keyTerms": [
+          "OECD Better Life Index",
+          "Human Development Index (HDI)",
+          "Happy Planet Index"
+        ],
+        "keyTakeaways": [
+          "Real values strip out inflation; nominal values do not. Always compare using the same deflator year.",
+          "GDP per capita at PPP is the standard cross-country comparison, but it is silent on inequality, environment and unpaid work."
+        ],
+        "commonMistakes": [
+          "GDP per capita is an average, not a typical income. A country can have high GDP per capita and still have most people in poverty if distribution is very unequal."
+        ]
+      }
+    ]
   },
   {
-    id: '3.2',
-    code: '3.2',
-    title: 'Aggregate demand and aggregate supply',
-    blurb: 'The two curves that frame every macro story: what shifts them, and what happens at the intersection.',
-    outcomes: [
-      'Construct and interpret AD and AS diagrams, including shifts caused by their determinants.',
-      'Compare monetarist/new classical and Keynesian views of aggregate supply in the short run and long run.',
-      'Explain short-run and long-run macroeconomic equilibrium, including the concepts of inflationary and deflationary gaps.',
+    "id": "3.2",
+    "code": "3.2",
+    "title": "Aggregate demand and aggregate supply",
+    "blurb": "The two curves that frame every macro story: what shifts them, and what happens at the intersection.",
+    "outcomes": [
+      "Construct and interpret AD and AS diagrams, including shifts caused by their determinants.",
+      "Compare monetarist/new classical and Keynesian views of aggregate supply in the short run and long run.",
+      "Explain short-run and long-run macroeconomic equilibrium, including the concepts of inflationary and deflationary gaps."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.2.1',
-        title: 'The aggregate demand curve',
-        minutes: 8,
-        body: [
-          'Aggregate demand (AD) is the total quantity of real output demanded at each price level. It slopes downward.',
-          'AD = C + I + G + (X − M). The downward slope reflects three effects: real balances, interest rate, and international competitiveness.',
-          'Determinants of the components:',
+        "id": "3.2.1",
+        "title": "The aggregate demand curve",
+        "minutes": 8,
+        "body": [
+          "Aggregate demand (AD) is the total quantity of real output demanded at each price level. It slopes downward.",
+          "AD = C + I + G + (X − M). The downward slope reflects three effects: real balances, interest rate, and international competitiveness.",
+          "Determinants of the components:"
         ],
-        bullets: [
-          'C: consumer confidence, interest rates, wealth, income taxes, household debt, expected future prices.',
-          'I: interest rates, business confidence, technology, business taxes, corporate debt.',
-          'G: political and economic priorities.',
-          'X − M: income of trading partners, exchange rates, trade policies.',
+        "bullets": [
+          "C: consumer confidence, interest rates, wealth, income taxes, household debt, expected future prices.",
+          "I: interest rates, business confidence, technology, business taxes, corporate debt.",
+          "G: political and economic priorities.",
+          "X − M: income of trading partners, exchange rates, trade policies."
         ],
-        diagram: 'ad',
-        keyTerms: ['aggregate demand (AD)', 'real balances effect', 'interest rate effect', 'international competitiveness effect'],
+        "diagram": "ad",
+        "keyTerms": [
+          "aggregate demand (AD)",
+          "real balances effect",
+          "interest rate effect",
+          "international competitiveness effect"
+        ],
+        "keyTakeaways": [
+          "AD slopes downward because of the wealth effect, interest rate effect, and exchange rate effect — all triggered by a change in the price level.",
+          "SRAS has three regions: flat at low Y (spare capacity), upward-sloping in the middle, vertical at Yf (full capacity)."
+        ]
       },
       {
-        id: '3.2.2',
-        title: 'The short-run aggregate supply (SRAS) curve',
-        minutes: 7,
-        body: [
-          'SRAS slopes upward in the short run: higher prices encourage firms to expand output because nominal wages and some input prices are sticky.',
-          'Determinants of SRAS: costs of factors of production, indirect taxes, productivity shocks, supply shocks (e.g. oil price).',
-          'A rightward shift of SRAS = favourable supply shock (lower costs or higher productivity). A leftward shift = adverse supply shock (cost-push inflation).',
+        "id": "3.2.2",
+        "title": "The short-run aggregate supply (SRAS) curve",
+        "minutes": 7,
+        "body": [
+          "SRAS slopes upward in the short run: higher prices encourage firms to expand output because nominal wages and some input prices are sticky.",
+          "Determinants of SRAS: costs of factors of production, indirect taxes, productivity shocks, supply shocks (e.g. oil price).",
+          "A rightward shift of SRAS = favourable supply shock (lower costs or higher productivity). A leftward shift = adverse supply shock (cost-push inflation)."
         ],
-        diagram: 'sras',
-        keyTerms: ['short-run aggregate supply (SRAS)', 'sticky wages', 'cost-push shock', 'favourable supply shock'],
+        "diagram": "sras",
+        "keyTerms": [
+          "short-run aggregate supply (SRAS)",
+          "sticky wages",
+          "cost-push shock",
+          "favourable supply shock"
+        ],
+        "keyTakeaways": [
+          "SRAS has three regions: flat at low Y (spare capacity), upward-sloping in the middle, vertical at Yf (full capacity).",
+          "LRAS is vertical at the natural rate of unemployment. The two views (Keynesian vs monetarist) differ only in the *speed* of adjustment back to it, not the long-run position."
+        ],
+        "commonMistakes": [
+          "Confusing shifts along the SRAS with shifts of the SRAS. A change in AD moves *along* SRAS. A change in input costs or productivity *shifts* the entire SRAS curve."
+        ]
       },
       {
-        id: '3.2.3',
-        title: 'Two views of long-run aggregate supply',
-        minutes: 10,
-        body: [
-          'Monetarist / new classical view: LRAS is vertical at the natural rate of unemployment. Markets clear; output returns to potential in the long run regardless of AD.',
-          'Keynesian view: AS can slope upward over the long term too, because wages and prices adjust slowly. Persistent deflationary gaps are possible.',
-          'Both views accept that the economy can deviate from potential in the short run — they disagree on how quickly (or whether) it returns.',
+        "id": "3.2.3",
+        "title": "Two views of long-run aggregate supply",
+        "minutes": 10,
+        "body": [
+          "Monetarist / new classical view: LRAS is vertical at the natural rate of unemployment. Markets clear; output returns to potential in the long run regardless of AD.",
+          "Keynesian view: AS can slope upward over the long term too, because wages and prices adjust slowly. Persistent deflationary gaps are possible.",
+          "Both views accept that the economy can deviate from potential in the short run — they disagree on how quickly (or whether) it returns."
         ],
-        diagram: 'lras',
-        keyTerms: ['long-run aggregate supply (LRAS)', 'natural rate of unemployment', 'monetarist', 'new classical', 'Keynesian', 'vertical LRAS'],
+        "diagram": "lras",
+        "keyTerms": [
+          "long-run aggregate supply (LRAS)",
+          "natural rate of unemployment",
+          "monetarist",
+          "new classical",
+          "Keynesian",
+          "vertical LRAS"
+        ],
+        "keyTakeaways": [
+          "LRAS is vertical at the natural rate of unemployment. The two views (Keynesian vs monetarist) differ only in the *speed* of adjustment back to it, not the long-run position.",
+          "AD slopes downward because of the wealth effect, interest rate effect, and exchange rate effect — all triggered by a change in the price level."
+        ]
       },
       {
-        id: '3.2.4',
-        title: 'Macroeconomic equilibrium: short run and long run',
-        minutes: 10,
-        body: [
-          'Short-run equilibrium: AD = SRAS at the current price level. This gives actual output Y and price level P.',
-          'In the monetarist model, the economy self-corrects: if Y > Yf, nominal wages and prices rise, SRAS shifts left until output returns to potential at a higher price.',
-          'In the Keynesian model, this adjustment may be slow or incomplete — leaving persistent deflationary gaps that require active policy.',
+        "id": "3.2.4",
+        "title": "Macroeconomic equilibrium: short run and long run",
+        "minutes": 10,
+        "body": [
+          "Short-run equilibrium: AD = SRAS at the current price level. This gives actual output Y and price level P.",
+          "In the monetarist model, the economy self-corrects: if Y > Yf, nominal wages and prices rise, SRAS shifts left until output returns to potential at a higher price.",
+          "In the Keynesian model, this adjustment may be slow or incomplete — leaving persistent deflationary gaps that require active policy."
         ],
-        diagram: 'equilibrium',
-        keyTerms: ['short-run equilibrium', 'long-run equilibrium', 'self-correction', 'inflationary gap', 'deflationary gap', 'recessionary gap'],
-      },
-    ],
+        "diagram": "equilibrium",
+        "keyTerms": [
+          "short-run equilibrium",
+          "long-run equilibrium",
+          "self-correction",
+          "inflationary gap",
+          "deflationary gap",
+          "recessionary gap"
+        ],
+        "keyTakeaways": [
+          "AD slopes downward because of the wealth effect, interest rate effect, and exchange rate effect — all triggered by a change in the price level.",
+          "SRAS has three regions: flat at low Y (spare capacity), upward-sloping in the middle, vertical at Yf (full capacity)."
+        ],
+        "workedExample": {
+          "title": "Self-correction after a positive demand shock",
+          "scenario": "The economy is producing Y₀ = 130, but Yf = 120. The current price level is P₀ = 85 and the SRAS curve passes through this point. Show what happens to the price level and output as the economy self-corrects.",
+          "steps": [
+            "Y₀ > Yf means the labour market is tight. Workers demand higher wages; firms face higher input costs.",
+            "Higher input costs shift SRAS to the left (SRAS₁).",
+            "Output falls back to Yf. The new equilibrium has a higher price level (P_E > P_E0)."
+          ],
+          "answer": "Output returns to Yf = 120 and the price level rises to P_E (typically around 92 in textbook numbers). The original AD shift did not raise long-run output; it only raised the price level."
+        }
+      }
+    ]
   },
   {
-    id: '3.3',
-    code: '3.3',
-    title: 'Macroeconomic objectives',
-    blurb: 'What governments want: growth, low unemployment, low inflation, balance — and the trade-offs between them.',
-    outcomes: [
-      'Measure and explain economic growth, unemployment and inflation, including their causes and consequences.',
-      'Discuss the trade-offs between the main macroeconomic objectives.',
-      '(HL) Discuss the Phillips curve, including the short-run and long-run relationship between inflation and unemployment.',
+    "id": "3.3",
+    "code": "3.3",
+    "title": "Macroeconomic objectives",
+    "blurb": "What governments want: growth, low unemployment, low inflation, balance — and the trade-offs between them.",
+    "outcomes": [
+      "Measure and explain economic growth, unemployment and inflation, including their causes and consequences.",
+      "Discuss the trade-offs between the main macroeconomic objectives.",
+      "(HL) Discuss the Phillips curve, including the short-run and long-run relationship between inflation and unemployment."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.3.1',
-        title: 'Economic growth: short-term and long-term',
-        minutes: 8,
-        body: [
-          'Short-term growth is driven by AD. In the AD/AS model, an outward shift of AD raises real output (and prices) in the short run.',
-          'Long-term growth is driven by LRAS — the productive capacity of the economy. It requires more or better factors of production, better technology, improved efficiency, and supportive institutions.',
-          'PPC shifts outward with growth in production possibilities. In AD/AS terms, LRAS shifts right.',
+        "id": "3.3.1",
+        "title": "Economic growth: short-term and long-term",
+        "minutes": 8,
+        "body": [
+          "Short-term growth is driven by AD. In the AD/AS model, an outward shift of AD raises real output (and prices) in the short run.",
+          "Long-term growth is driven by LRAS — the productive capacity of the economy. It requires more or better factors of production, better technology, improved efficiency, and supportive institutions.",
+          "PPC shifts outward with growth in production possibilities. In AD/AS terms, LRAS shifts right."
         ],
-        diagram: 'growth',
-        keyTerms: ['economic growth', 'short-term growth', 'long-term growth', 'LRAS shift', 'PPC shift'],
+        "diagram": "growth",
+        "keyTerms": [
+          "economic growth",
+          "short-term growth",
+          "long-term growth",
+          "LRAS shift",
+          "PPC shift"
+        ],
+        "keyTakeaways": [
+          "The four main macro objectives are economic growth, low unemployment, low inflation, and balance of payments balance — and they trade off against each other.",
+          "The natural rate of unemployment is the rate consistent with stable inflation in the long run. It is NOT zero."
+        ]
       },
       {
-        id: '3.3.2',
-        title: 'Unemployment: types, measures, costs',
-        minutes: 9,
-        body: [
-          'Unemployment rate = (unemployed ÷ labour force) × 100. The labour force excludes those not actively seeking work.',
-          'Types of unemployment:',
+        "id": "3.3.2",
+        "title": "Unemployment: types, measures, costs",
+        "minutes": 9,
+        "body": [
+          "Unemployment rate = (unemployed ÷ labour force) × 100. The labour force excludes those not actively seeking work.",
+          "Types of unemployment:"
         ],
-        bullets: [
-          'Cyclical (demand-deficient) — falls in AD, associated with recessionary gaps.',
-          'Structural — skills mismatch or geographic mismatch between workers and jobs.',
-          'Seasonal — predictable variation across the year (e.g. tourism, agriculture).',
-          'Frictional — short-run unemployment while workers transition between jobs.',
+        "bullets": [
+          "Cyclical (demand-deficient) — falls in AD, associated with recessionary gaps.",
+          "Structural — skills mismatch or geographic mismatch between workers and jobs.",
+          "Seasonal — predictable variation across the year (e.g. tourism, agriculture).",
+          "Frictional — short-run unemployment while workers transition between jobs."
         ],
-        bodyAfter: [
-          'The natural rate of unemployment is the sum of structural, seasonal and frictional unemployment — it persists even at potential output.',
-          'Costs: personal (income, health, skills), social (inequality, exclusion), economic (lost output, lower tax revenue).',
+        "bodyAfter": [
+          "The natural rate of unemployment is the sum of structural, seasonal and frictional unemployment — it persists even at potential output.",
+          "Costs: personal (income, health, skills), social (inequality, exclusion), economic (lost output, lower tax revenue)."
         ],
-        diagram: 'unemployment',
-        keyTerms: ['unemployment rate', 'labour force', 'cyclical unemployment', 'structural unemployment', 'frictional unemployment', 'seasonal unemployment', 'natural rate of unemployment'],
+        "diagram": "unemployment",
+        "keyTerms": [
+          "unemployment rate",
+          "labour force",
+          "cyclical unemployment",
+          "structural unemployment",
+          "frictional unemployment",
+          "seasonal unemployment",
+          "natural rate of unemployment"
+        ],
+        "keyTakeaways": [
+          "The natural rate of unemployment is the rate consistent with stable inflation in the long run. It is NOT zero.",
+          "Headline CPI includes food and energy; core CPI excludes them. Central banks watch core more closely because it strips out noise."
+        ],
+        "workedExample": {
+          "title": "Calculating the unemployment rate",
+          "scenario": "Labour force = 250 million. Employed = 232 million. Unemployed but actively seeking work = 8 million. Discouraged workers (gave up looking) = 3 million. What is the official unemployment rate?",
+          "steps": [
+            "The labour force counts the employed and the unemployed, but NOT the discouraged workers (they have left the labour force).",
+            "Official labour force = 232 + 8 = 240 million.",
+            "Unemployment rate = unemployed / labour force = 8 / 240."
+          ],
+          "answer": "Unemployment rate = 3.33%. If you included discouraged workers (broader U-4 measure), the rate would be higher: 11 / 250 = 4.4%."
+        },
+        "commonMistakes": [
+          "A person who stops looking for work is no longer \"unemployed\" — they have left the labour force. Falling unemployment can mask falling participation."
+        ]
       },
       {
-        id: '3.3.3',
-        title: 'Inflation: causes, measures, costs',
-        minutes: 10,
-        body: [
-          'Inflation is a sustained rise in the general price level. Measured using the Consumer Price Index (CPI): a weighted basket of goods and services.',
-          'Causes:',
+        "id": "3.3.3",
+        "title": "Inflation: causes, measures, costs",
+        "minutes": 10,
+        "body": [
+          "Inflation is a sustained rise in the general price level. Measured using the Consumer Price Index (CPI): a weighted basket of goods and services.",
+          "Causes:"
         ],
-        bullets: [
-          'Demand-pull — AD rises faster than AS. Often associated with rapid growth above potential.',
-          'Cost-push — SRAS shifts left (e.g. oil shock, wage-price spiral). Output falls, prices rise — stagflation.',
+        "bullets": [
+          "Demand-pull — AD rises faster than AS. Often associated with rapid growth above potential.",
+          "Cost-push — SRAS shifts left (e.g. oil shock, wage-price spiral). Output falls, prices rise — stagflation."
         ],
-        bodyAfter: [
-          'Costs of high inflation: uncertainty, redistributive effects, damaged export competitiveness, lower saving, inefficient resource allocation, slower growth.',
-          'Disinflation is a fall in the inflation rate; deflation is a sustained fall in prices. Deflation raises the real value of debt and can cause a debt-deflation spiral.',
-          'CPI limitations: quality change, new products, substitution bias, different spending patterns across households.',
+        "bodyAfter": [
+          "Costs of high inflation: uncertainty, redistributive effects, damaged export competitiveness, lower saving, inefficient resource allocation, slower growth.",
+          "Disinflation is a fall in the inflation rate; deflation is a sustained fall in prices. Deflation raises the real value of debt and can cause a debt-deflation spiral.",
+          "CPI limitations: quality change, new products, substitution bias, different spending patterns across households."
         ],
-        diagram: 'inflation',
-        keyTerms: ['inflation', 'deflation', 'disinflation', 'CPI', 'demand-pull inflation', 'cost-push inflation', 'stagflation'],
+        "diagram": "inflation",
+        "keyTerms": [
+          "inflation",
+          "deflation",
+          "disinflation",
+          "CPI",
+          "demand-pull inflation",
+          "cost-push inflation",
+          "stagflation"
+        ],
+        "keyTakeaways": [
+          "Headline CPI includes food and energy; core CPI excludes them. Central banks watch core more closely because it strips out noise.",
+          "The four main macro objectives are economic growth, low unemployment, low inflation, and balance of payments balance — and they trade off against each other."
+        ],
+        "commonMistakes": [
+          "Deflation is NOT the same as low inflation. Falling prices can cause real debt burdens to rise, freezing up the economy (the debt-deflation spiral)."
+        ]
       },
       {
-        id: '3.3.4',
-        title: '(HL) The Phillips curve',
-        minutes: 12,
-        body: [
-          'The Phillips curve shows the inverse relationship between the rate of inflation and the rate of unemployment.',
-          'Short-run Phillips curve (SRPC): downward sloping. Policymakers face a trade-off — accept higher inflation to lower unemployment (or vice versa).',
-          'Long-run Phillips curve (LRPC): vertical at the natural rate of unemployment. In the long run, attempts to push unemployment below the natural rate only produce accelerating inflation.',
-          'Expectations-augmented view: the SRPC shifts when expected inflation changes. The 1970s stagflation episode (high inflation + high unemployment) is the standard example.',
+        "id": "3.3.4",
+        "title": "(HL) The Phillips curve",
+        "minutes": 12,
+        "body": [
+          "The Phillips curve shows the inverse relationship between the rate of inflation and the rate of unemployment.",
+          "Short-run Phillips curve (SRPC): downward sloping. Policymakers face a trade-off — accept higher inflation to lower unemployment (or vice versa).",
+          "Long-run Phillips curve (LRPC): vertical at the natural rate of unemployment. In the long run, attempts to push unemployment below the natural rate only produce accelerating inflation.",
+          "Expectations-augmented view: the SRPC shifts when expected inflation changes. The 1970s stagflation episode (high inflation + high unemployment) is the standard example."
         ],
-        diagram: 'phillips',
-        keyTerms: ['Phillips curve', 'short-run Phillips curve (SRPC)', 'long-run Phillips curve (LRPC)', 'expectations-augmented', 'stagflation', 'natural rate hypothesis'],
+        "diagram": "phillips",
+        "keyTerms": [
+          "Phillips curve",
+          "short-run Phillips curve (SRPC)",
+          "long-run Phillips curve (LRPC)",
+          "expectations-augmented",
+          "stagflation",
+          "natural rate hypothesis"
+        ],
+        "keyTakeaways": [
+          "The four main macro objectives are economic growth, low unemployment, low inflation, and balance of payments balance — and they trade off against each other.",
+          "The natural rate of unemployment is the rate consistent with stable inflation in the long run. It is NOT zero."
+        ]
       },
       {
-        id: '3.3.5',
-        title: 'Trade-offs between objectives',
-        minutes: 7,
-        body: [
-          'Governments usually want all of: high growth, low unemployment, low inflation, external balance, equity. The objectives can conflict.',
-          'Growth vs environment: faster growth may degrade natural capital (negative externality). Sustainability asks whether growth is sustainable over time.',
-          'Growth vs equity: growth is not automatically shared — distributional policy may be needed.',
-          'Inflation vs unemployment: in the short run, the Phillips trade-off; in the long run, no permanent trade-off.',
+        "id": "3.3.5",
+        "title": "Trade-offs between objectives",
+        "minutes": 7,
+        "body": [
+          "Governments usually want all of: high growth, low unemployment, low inflation, external balance, equity. The objectives can conflict.",
+          "Growth vs environment: faster growth may degrade natural capital (negative externality). Sustainability asks whether growth is sustainable over time.",
+          "Growth vs equity: growth is not automatically shared — distributional policy may be needed.",
+          "Inflation vs unemployment: in the short run, the Phillips trade-off; in the long run, no permanent trade-off."
         ],
-        diagram: null,
-        keyTerms: ['trade-off', 'sustainability', 'equity', 'Phillips curve trade-off'],
-      },
-    ],
+        "diagram": null,
+        "keyTerms": [
+          "trade-off",
+          "sustainability",
+          "equity",
+          "Phillips curve trade-off"
+        ],
+        "keyTakeaways": [
+          "The natural rate of unemployment is the rate consistent with stable inflation in the long run. It is NOT zero.",
+          "Headline CPI includes food and energy; core CPI excludes them. Central banks watch core more closely because it strips out noise."
+        ]
+      }
+    ]
   },
   {
-    id: '3.4',
-    code: '3.4',
-    title: 'Inequality and poverty',
-    blurb: 'Who gets what — and what governments can do about it.',
-    outcomes: [
-      'Distinguish between equality and equity, and explain the meaning of economic inequality and poverty.',
-      'Construct and interpret a Lorenz curve, and explain the Gini coefficient.',
-      'Discuss causes and consequences of inequality, and evaluate policies to reduce it.',
+    "id": "3.4",
+    "code": "3.4",
+    "title": "Inequality and poverty",
+    "blurb": "Who gets what — and what governments can do about it.",
+    "outcomes": [
+      "Distinguish between equality and equity, and explain the meaning of economic inequality and poverty.",
+      "Construct and interpret a Lorenz curve, and explain the Gini coefficient.",
+      "Discuss causes and consequences of inequality, and evaluate policies to reduce it."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.4.1',
-        title: 'Inequality: income, wealth, and how to measure it',
-        minutes: 8,
-        body: [
-          'Income inequality = unequal distribution of current earnings. Wealth inequality = unequal ownership of assets. The two often overlap but are distinct.',
-          'Lorenz curve: plots cumulative share of income (y-axis) against cumulative share of population (x-axis). The further the curve bows from the line of equality, the greater the inequality.',
-          'Gini coefficient = area between line of equality and Lorenz curve ÷ total area under line of equality. Ranges from 0 (perfect equality) to 1 (perfect inequality).',
+        "id": "3.4.1",
+        "title": "Inequality: income, wealth, and how to measure it",
+        "minutes": 8,
+        "body": [
+          "Income inequality = unequal distribution of current earnings. Wealth inequality = unequal ownership of assets. The two often overlap but are distinct.",
+          "Lorenz curve: plots cumulative share of income (y-axis) against cumulative share of population (x-axis). The further the curve bows from the line of equality, the greater the inequality.",
+          "Gini coefficient = area between line of equality and Lorenz curve ÷ total area under line of equality. Ranges from 0 (perfect equality) to 1 (perfect inequality)."
         ],
-        diagram: 'lorenz',
-        keyTerms: ['income inequality', 'wealth inequality', 'Lorenz curve', 'Gini coefficient'],
+        "diagram": "lorenz",
+        "keyTerms": [
+          "income inequality",
+          "wealth inequality",
+          "Lorenz curve",
+          "Gini coefficient"
+        ],
+        "keyTakeaways": [
+          "Wealth inequality is usually much greater than income inequality, because wealth accumulates over a lifetime.",
+          "Gini ranges from 0 (perfect equality) to 1 (maximum inequality). Most countries sit between 0.25 and 0.65."
+        ],
+        "commonMistakes": [
+          "The Gini coefficient of income can fall while the Gini of wealth rises. Looking only at income can hide a divergence between the two."
+        ]
       },
       {
-        id: '3.4.2',
-        title: 'Poverty: absolute, relative, and how to measure it',
-        minutes: 6,
-        body: [
-          'Absolute poverty: unable to afford a minimum standard of living (e.g. international poverty line of $2.15/day at PPP, set by the World Bank).',
-          'Relative poverty: income below a threshold relative to the country\'s median (commonly 60% of median equivalised income).',
-          'Composite measures like the Multidimensional Poverty Index (MPI) capture health, education and living standards together.',
+        "id": "3.4.2",
+        "title": "Poverty: absolute, relative, and how to measure it",
+        "minutes": 6,
+        "body": [
+          "Absolute poverty: unable to afford a minimum standard of living (e.g. international poverty line of $2.15/day at PPP, set by the World Bank).",
+          "Relative poverty: income below a threshold relative to the country's median (commonly 60% of median equivalised income).",
+          "Composite measures like the Multidimensional Poverty Index (MPI) capture health, education and living standards together."
         ],
-        diagram: null,
-        keyTerms: ['absolute poverty', 'relative poverty', 'Multidimensional Poverty Index (MPI)', 'international poverty line'],
+        "diagram": null,
+        "keyTerms": [
+          "absolute poverty",
+          "relative poverty",
+          "Multidimensional Poverty Index (MPI)",
+          "international poverty line"
+        ],
+        "keyTakeaways": [
+          "Gini ranges from 0 (perfect equality) to 1 (maximum inequality). Most countries sit between 0.25 and 0.65.",
+          "Redistribution can happen through progressive taxes, transfers, and public services. Each has different incentive effects."
+        ]
       },
       {
-        id: '3.4.3',
-        title: 'Causes and consequences of inequality',
-        minutes: 7,
-        body: [
-          'Causes: inequality of opportunity, unequal resource ownership, different human capital, discrimination, government tax/benefit policy, globalisation, technology-driven skill-biased change.',
-          'Consequences: weaker economic growth (poorer human capital, less social mobility), lower living standards for the worst-off, social instability and reduced trust, political polarisation.',
+        "id": "3.4.3",
+        "title": "Causes and consequences of inequality",
+        "minutes": 7,
+        "body": [
+          "Causes: inequality of opportunity, unequal resource ownership, different human capital, discrimination, government tax/benefit policy, globalisation, technology-driven skill-biased change.",
+          "Consequences: weaker economic growth (poorer human capital, less social mobility), lower living standards for the worst-off, social instability and reduced trust, political polarisation."
         ],
-        diagram: null,
-        keyTerms: ['inequality of opportunity', 'human capital', 'skill-biased technical change', 'social mobility'],
+        "diagram": null,
+        "keyTerms": [
+          "inequality of opportunity",
+          "human capital",
+          "skill-biased technical change",
+          "social mobility"
+        ],
+        "keyTakeaways": [
+          "Redistribution can happen through progressive taxes, transfers, and public services. Each has different incentive effects.",
+          "Wealth inequality is usually much greater than income inequality, because wealth accumulates over a lifetime."
+        ]
       },
       {
-        id: '3.4.4',
-        title: 'Taxation and redistribution',
-        minutes: 8,
-        body: [
-          'Progressive tax: rate rises with income. Regressive: rate falls with income (typical of indirect taxes like sales tax). Proportional: same rate for all.',
-          'Average tax rate = total tax ÷ total income. Marginal tax rate = tax on the next unit of income. Marginal rates matter more for behaviour.',
-          'Direct taxes (income, corporate, wealth) and indirect taxes (VAT, excise) have different equity implications. Direct taxes tend to be more progressive.',
+        "id": "3.4.4",
+        "title": "Taxation and redistribution",
+        "minutes": 8,
+        "body": [
+          "Progressive tax: rate rises with income. Regressive: rate falls with income (typical of indirect taxes like sales tax). Proportional: same rate for all.",
+          "Average tax rate = total tax ÷ total income. Marginal tax rate = tax on the next unit of income. Marginal rates matter more for behaviour.",
+          "Direct taxes (income, corporate, wealth) and indirect taxes (VAT, excise) have different equity implications. Direct taxes tend to be more progressive."
         ],
-        diagram: null,
-        keyTerms: ['progressive tax', 'regressive tax', 'proportional tax', 'average tax rate', 'marginal tax rate', 'direct tax', 'indirect tax'],
+        "diagram": null,
+        "keyTerms": [
+          "progressive tax",
+          "regressive tax",
+          "proportional tax",
+          "average tax rate",
+          "marginal tax rate",
+          "direct tax",
+          "indirect tax"
+        ],
+        "keyTakeaways": [
+          "Wealth inequality is usually much greater than income inequality, because wealth accumulates over a lifetime.",
+          "Gini ranges from 0 (perfect equality) to 1 (maximum inequality). Most countries sit between 0.25 and 0.65."
+        ],
+        "workedExample": {
+          "title": "Average vs marginal tax rate",
+          "scenario": "A person earns $50,000. The first $20,000 is taxed at 10%, the next $30,000 at 25%. What are the average and marginal tax rates?",
+          "steps": [
+            "Tax on first bracket: 20,000 × 0.10 = $2,000.",
+            "Tax on second bracket: 30,000 × 0.25 = $7,500.",
+            "Total tax = 9,500. Average = 9,500 / 50,000 = 19%.",
+            "Marginal tax rate = rate on the next dollar earned = 25%."
+          ],
+          "answer": "Average rate 19%, marginal rate 25%. The marginal rate matters for incentives: the next dollar earned is taxed at 25%, so the person keeps 75 cents of it."
+        }
       },
       {
-        id: '3.4.5',
-        title: 'Policies to reduce inequality and poverty',
-        minutes: 7,
-        body: [
-          'Tax-side: progressive income tax, wealth tax, removing tax loopholes, higher minimum wage.',
-          'Spending-side: transfer payments (unemployment benefits, pensions, child benefit), targeted spending (means-tested programs), universal basic income.',
-          'Investment in human capital: education, healthcare, training, early childhood programs. Reducing discrimination via anti-discrimination law and enforcement.',
-          'Evaluate each in terms of equity, efficiency, incentive effects, fiscal cost, and time lags.',
+        "id": "3.4.5",
+        "title": "Policies to reduce inequality and poverty",
+        "minutes": 7,
+        "body": [
+          "Tax-side: progressive income tax, wealth tax, removing tax loopholes, higher minimum wage.",
+          "Spending-side: transfer payments (unemployment benefits, pensions, child benefit), targeted spending (means-tested programs), universal basic income.",
+          "Investment in human capital: education, healthcare, training, early childhood programs. Reducing discrimination via anti-discrimination law and enforcement.",
+          "Evaluate each in terms of equity, efficiency, incentive effects, fiscal cost, and time lags."
         ],
-        diagram: null,
-        keyTerms: ['transfer payments', 'universal basic income (UBI)', 'means-tested', 'human capital investment', 'minimum wage'],
-      },
-    ],
+        "diagram": null,
+        "keyTerms": [
+          "transfer payments",
+          "universal basic income (UBI)",
+          "means-tested",
+          "human capital investment",
+          "minimum wage"
+        ],
+        "keyTakeaways": [
+          "Gini ranges from 0 (perfect equality) to 1 (maximum inequality). Most countries sit between 0.25 and 0.65.",
+          "Redistribution can happen through progressive taxes, transfers, and public services. Each has different incentive effects."
+        ]
+      }
+    ]
   },
   {
-    id: '3.5',
-    code: '3.5',
-    title: 'Monetary policy',
-    blurb: 'How central banks steer the economy by changing the price of money.',
-    outcomes: [
-      'Explain the goals of monetary policy and the link between interest rates and aggregate demand.',
-      '(HL) Explain money creation by commercial banks, and the tools of monetary policy.',
-      'Evaluate the effectiveness of monetary policy in achieving macroeconomic objectives.',
+    "id": "3.5",
+    "code": "3.5",
+    "title": "Monetary policy",
+    "blurb": "How central banks steer the economy by changing the price of money.",
+    "outcomes": [
+      "Explain the goals of monetary policy and the link between interest rates and aggregate demand.",
+      "(HL) Explain money creation by commercial banks, and the tools of monetary policy.",
+      "Evaluate the effectiveness of monetary policy in achieving macroeconomic objectives."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.5.1',
-        title: 'Goals of monetary policy',
-        minutes: 6,
-        body: [
-          'Most central banks have a primary mandate: low and stable inflation (typically an explicit target — inflation targeting).',
-          'Secondary goals: low unemployment, smoothing the business cycle, supporting long-term growth, external balance.',
-          'In practice, the central bank adjusts a short-term policy rate (e.g. base rate, federal funds rate) to influence the whole interest-rate structure.',
+        "id": "3.5.1",
+        "title": "Goals of monetary policy",
+        "minutes": 6,
+        "body": [
+          "Most central banks have a primary mandate: low and stable inflation (typically an explicit target — inflation targeting).",
+          "Secondary goals: low unemployment, smoothing the business cycle, supporting long-term growth, external balance.",
+          "In practice, the central bank adjusts a short-term policy rate (e.g. base rate, federal funds rate) to influence the whole interest-rate structure."
         ],
-        diagram: null,
-        keyTerms: ['monetary policy', 'inflation targeting', 'central bank', 'policy rate', 'base rate'],
+        "diagram": null,
+        "keyTerms": [
+          "monetary policy",
+          "inflation targeting",
+          "central bank",
+          "policy rate",
+          "base rate"
+        ],
+        "keyTakeaways": [
+          "Central banks influence short-term interest rates and the money supply. They do not directly control inflation or output — that is the transmission mechanism's job.",
+          "In a modern economy, most money is created by commercial banks making loans (not by the central bank printing notes)."
+        ],
+        "commonMistakes": [
+          "A central bank is NOT the government. It operates independently to avoid political pressure to print money before elections."
+        ]
       },
       {
-        id: '3.5.2',
-        title: '(HL) How money is created',
-        minutes: 8,
-        body: [
-          'Most money in modern economies is bank deposits, not physical cash. Commercial banks create deposits by lending.',
-          'When a bank makes a loan, it credits the borrower\'s account with a new deposit. The loan creates a new deposit — that is money creation.',
-          'The limit on creation is the reserve ratio: banks must hold a fraction of deposits as reserves. The money multiplier links new reserves to the maximum possible new deposits.',
+        "id": "3.5.2",
+        "title": "(HL) How money is created",
+        "minutes": 8,
+        "body": [
+          "Most money in modern economies is bank deposits, not physical cash. Commercial banks create deposits by lending.",
+          "When a bank makes a loan, it credits the borrower's account with a new deposit. The loan creates a new deposit — that is money creation.",
+          "The limit on creation is the reserve ratio: banks must hold a fraction of deposits as reserves. The money multiplier links new reserves to the maximum possible new deposits."
         ],
-        formula: 'Maximum new deposits = New reserves × (1 / reserve ratio)',
-        diagram: 'moneyMarket',
-        keyTerms: ['money creation', 'reserve ratio', 'money multiplier', 'fractional reserve banking'],
+        "formula": "Maximum new deposits = New reserves × (1 / reserve ratio)",
+        "diagram": "moneyMarket",
+        "keyTerms": [
+          "money creation",
+          "reserve ratio",
+          "money multiplier",
+          "fractional reserve banking"
+        ],
+        "keyTakeaways": [
+          "In a modern economy, most money is created by commercial banks making loans (not by the central bank printing notes).",
+          "Quantitative easing is unconventional: it expands the central bank's balance sheet when policy rates are stuck at the zero lower bound."
+        ]
       },
       {
-        id: '3.5.3',
-        title: '(HL) Tools of monetary policy',
-        minutes: 8,
-        body: [
-          'Open market operations: the central bank buys or sells government bonds. Buying bonds injects reserves (expansionary); selling drains them (contractionary).',
-          'Minimum reserve requirements: changing the fraction of deposits banks must hold.',
-          'Changes to the policy rate (discount/refinancing/base rate): the rate at which the central bank lends to commercial banks. Lower = expansionary.',
-          'Quantitative easing (QE): large-scale asset purchases when the policy rate is at the zero lower bound. Aims to lower long-term yields and stimulate demand.',
+        "id": "3.5.3",
+        "title": "(HL) Tools of monetary policy",
+        "minutes": 8,
+        "body": [
+          "Open market operations: the central bank buys or sells government bonds. Buying bonds injects reserves (expansionary); selling drains them (contractionary).",
+          "Minimum reserve requirements: changing the fraction of deposits banks must hold.",
+          "Changes to the policy rate (discount/refinancing/base rate): the rate at which the central bank lends to commercial banks. Lower = expansionary.",
+          "Quantitative easing (QE): large-scale asset purchases when the policy rate is at the zero lower bound. Aims to lower long-term yields and stimulate demand."
         ],
-        diagram: 'moneyMarket',
-        keyTerms: ['open market operations', 'reserve requirements', 'discount rate', 'quantitative easing (QE)', 'zero lower bound'],
+        "diagram": "moneyMarket",
+        "keyTerms": [
+          "open market operations",
+          "reserve requirements",
+          "discount rate",
+          "quantitative easing (QE)",
+          "zero lower bound"
+        ],
+        "keyTakeaways": [
+          "Quantitative easing is unconventional: it expands the central bank's balance sheet when policy rates are stuck at the zero lower bound.",
+          "Central banks influence short-term interest rates and the money supply. They do not directly control inflation or output — that is the transmission mechanism's job."
+        ],
+        "workedExample": {
+          "title": "The money multiplier",
+          "scenario": "Reserve ratio is 10%. The central bank injects $1 billion of new reserves. How much do total deposits eventually expand by?",
+          "steps": [
+            "The money multiplier is 1 / reserve ratio = 1 / 0.10 = 10.",
+            "Maximum deposit expansion = injection × multiplier = 1,000 × 10 = 10,000."
+          ],
+          "answer": "Up to $10 billion of new deposits — in theory. In practice the multiplier is smaller because banks hold excess reserves and not all loans get re-deposited."
+        }
       },
       {
-        id: '3.5.4',
-        title: 'Monetary transmission and AD/AS',
-        minutes: 7,
-        body: [
-          'A cut in the policy rate lowers market interest rates, which raises investment (I) and interest-sensitive consumption (C). AD shifts right.',
-          'Lower rates can also weaken the currency, raising net exports (X − M). Higher asset prices raise wealth and consumer confidence.',
-          'In AD/AS terms, expansionary monetary policy shifts AD right; contractionary shifts it left.',
+        "id": "3.5.4",
+        "title": "Monetary transmission and AD/AS",
+        "minutes": 7,
+        "body": [
+          "A cut in the policy rate lowers market interest rates, which raises investment (I) and interest-sensitive consumption (C). AD shifts right.",
+          "Lower rates can also weaken the currency, raising net exports (X − M). Higher asset prices raise wealth and consumer confidence.",
+          "In AD/AS terms, expansionary monetary policy shifts AD right; contractionary shifts it left."
         ],
-        diagram: 'adas',
-        keyTerms: ['monetary transmission mechanism', 'expansionary monetary policy', 'contractionary monetary policy', 'interest rate channel', 'exchange rate channel'],
+        "diagram": "adas",
+        "keyTerms": [
+          "monetary transmission mechanism",
+          "expansionary monetary policy",
+          "contractionary monetary policy",
+          "interest rate channel",
+          "exchange rate channel"
+        ],
+        "keyTakeaways": [
+          "Central banks influence short-term interest rates and the money supply. They do not directly control inflation or output — that is the transmission mechanism's job.",
+          "In a modern economy, most money is created by commercial banks making loans (not by the central bank printing notes)."
+        ]
       },
       {
-        id: '3.5.5',
-        title: 'Real vs nominal interest rates',
-        minutes: 5,
-        body: [
-          'Nominal interest rate is the rate actually paid. Real interest rate ≈ nominal rate − inflation rate.',
-          'Borrowers and lenders care about real rates: the real rate is the actual cost of borrowing or the actual reward for saving.',
-          'In a 2% inflation environment, a 5% nominal mortgage has a real rate of about 3%.',
+        "id": "3.5.5",
+        "title": "Real vs nominal interest rates",
+        "minutes": 5,
+        "body": [
+          "Nominal interest rate is the rate actually paid. Real interest rate ≈ nominal rate − inflation rate.",
+          "Borrowers and lenders care about real rates: the real rate is the actual cost of borrowing or the actual reward for saving.",
+          "In a 2% inflation environment, a 5% nominal mortgage has a real rate of about 3%."
         ],
-        formula: 'Real interest rate ≈ Nominal interest rate − Inflation rate',
-        diagram: null,
-        keyTerms: ['nominal interest rate', 'real interest rate', 'Fisher equation'],
+        "formula": "Real interest rate ≈ Nominal interest rate − Inflation rate",
+        "diagram": null,
+        "keyTerms": [
+          "nominal interest rate",
+          "real interest rate",
+          "Fisher equation"
+        ],
+        "keyTakeaways": [
+          "In a modern economy, most money is created by commercial banks making loans (not by the central bank printing notes).",
+          "Quantitative easing is unconventional: it expands the central bank's balance sheet when policy rates are stuck at the zero lower bound."
+        ]
       },
       {
-        id: '3.5.6',
-        title: 'Effectiveness of monetary policy',
-        minutes: 6,
-        body: [
-          'Strengths: incremental, flexible, easily reversible, short time lags (relative to fiscal).',
-          'Constraints: limited scope when rates are near zero (the zero lower bound); low consumer/business confidence can blunt the response; global capital flows can offset domestic rate moves.',
-          'Most effective in closing demand-deficient (recessionary) gaps; less effective against supply-side shocks.',
+        "id": "3.5.6",
+        "title": "Effectiveness of monetary policy",
+        "minutes": 6,
+        "body": [
+          "Strengths: incremental, flexible, easily reversible, short time lags (relative to fiscal).",
+          "Constraints: limited scope when rates are near zero (the zero lower bound); low consumer/business confidence can blunt the response; global capital flows can offset domestic rate moves.",
+          "Most effective in closing demand-deficient (recessionary) gaps; less effective against supply-side shocks."
         ],
-        diagram: null,
-        keyTerms: ['zero lower bound', 'liquidity trap', 'transmission lag'],
-      },
-    ],
+        "diagram": null,
+        "keyTerms": [
+          "zero lower bound",
+          "liquidity trap",
+          "transmission lag"
+        ],
+        "keyTakeaways": [
+          "Quantitative easing is unconventional: it expands the central bank's balance sheet when policy rates are stuck at the zero lower bound.",
+          "Central banks influence short-term interest rates and the money supply. They do not directly control inflation or output — that is the transmission mechanism's job."
+        ]
+      }
+    ]
   },
   {
-    id: '3.6',
-    code: '3.6',
-    title: 'Fiscal policy',
-    blurb: 'How governments use taxes and spending to steer the economy.',
-    outcomes: [
-      'Describe the sources of government revenue and types of expenditure.',
-      'Explain the goals and transmission of fiscal policy using AD/AS.',
-      '(HL) Calculate the Keynesian multiplier and discuss its determinants.',
-      'Evaluate the effectiveness of fiscal policy, including constraints like crowding out.',
+    "id": "3.6",
+    "code": "3.6",
+    "title": "Fiscal policy",
+    "blurb": "How governments use taxes and spending to steer the economy.",
+    "outcomes": [
+      "Describe the sources of government revenue and types of expenditure.",
+      "Explain the goals and transmission of fiscal policy using AD/AS.",
+      "(HL) Calculate the Keynesian multiplier and discuss its determinants.",
+      "Evaluate the effectiveness of fiscal policy, including constraints like crowding out."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.6.1',
-        title: 'Government revenue and expenditure',
-        minutes: 6,
-        body: [
-          'Revenue: direct taxes (income, corporate, wealth), indirect taxes (VAT, excise), sale of goods and services from state-owned enterprises, sale of assets, borrowing.',
-          'Expenditure: current (salaries, goods, services, interest payments), capital (infrastructure, equipment), transfer payments (pensions, unemployment benefit, child benefit).',
-          'A budget deficit = expenditure > revenue. Government (national) debt is the stock of accumulated past deficits.',
+        "id": "3.6.1",
+        "title": "Government revenue and expenditure",
+        "minutes": 6,
+        "body": [
+          "Revenue: direct taxes (income, corporate, wealth), indirect taxes (VAT, excise), sale of goods and services from state-owned enterprises, sale of assets, borrowing.",
+          "Expenditure: current (salaries, goods, services, interest payments), capital (infrastructure, equipment), transfer payments (pensions, unemployment benefit, child benefit).",
+          "A budget deficit = expenditure > revenue. Government (national) debt is the stock of accumulated past deficits."
         ],
-        diagram: null,
-        keyTerms: ['budget deficit', 'budget surplus', 'government debt', 'current expenditure', 'capital expenditure', 'transfer payments'],
+        "diagram": null,
+        "keyTerms": [
+          "budget deficit",
+          "budget surplus",
+          "government debt",
+          "current expenditure",
+          "capital expenditure",
+          "transfer payments"
+        ],
+        "keyTakeaways": [
+          "The simple spending multiplier is 1 / (1 − MPC). A higher MPC means a bigger multiplier.",
+          "A balanced-budget multiplier of 1 means ΔG = ΔT raises AD by exactly the size of the G increase."
+        ]
       },
       {
-        id: '3.6.2',
-        title: 'Goals and transmission of fiscal policy',
-        minutes: 7,
-        body: [
-          'Goals: low inflation, low unemployment, stable long-term growth, smoothing the cycle, equitable income distribution, external balance.',
-          'Expansionary fiscal policy: increase G, cut T, or both. AD shifts right. Used to close a deflationary/recessionary gap.',
-          'Contractionary fiscal policy: cut G, raise T, or both. AD shifts left. Used to close an inflationary gap or reduce debt.',
+        "id": "3.6.2",
+        "title": "Goals and transmission of fiscal policy",
+        "minutes": 7,
+        "body": [
+          "Goals: low inflation, low unemployment, stable long-term growth, smoothing the cycle, equitable income distribution, external balance.",
+          "Expansionary fiscal policy: increase G, cut T, or both. AD shifts right. Used to close a deflationary/recessionary gap.",
+          "Contractionary fiscal policy: cut G, raise T, or both. AD shifts left. Used to close an inflationary gap or reduce debt."
         ],
-        diagram: 'adas',
-        keyTerms: ['expansionary fiscal policy', 'contractionary fiscal policy', 'fiscal stance', 'automatic stabiliser'],
+        "diagram": "adas",
+        "keyTerms": [
+          "expansionary fiscal policy",
+          "contractionary fiscal policy",
+          "fiscal stance",
+          "automatic stabiliser"
+        ],
+        "keyTakeaways": [
+          "A balanced-budget multiplier of 1 means ΔG = ΔT raises AD by exactly the size of the G increase.",
+          "Crowding out is the main monetarist objection to fiscal policy. The Keynesian response is that crowding out is small in a recession."
+        ]
       },
       {
-        id: '3.6.3',
-        title: '(HL) The Keynesian multiplier',
-        minutes: 10,
-        body: [
-          'A change in an injection (G, I, X) has a multiplied effect on national income, because each round of spending becomes someone else\'s income, which they partly re-spend.',
-          'The size of the multiplier depends on leakages: marginal propensities to save (MPS), tax (MPT), and import (MPM).',
+        "id": "3.6.3",
+        "title": "(HL) The Keynesian multiplier",
+        "minutes": 10,
+        "body": [
+          "A change in an injection (G, I, X) has a multiplied effect on national income, because each round of spending becomes someone else's income, which they partly re-spend.",
+          "The size of the multiplier depends on leakages: marginal propensities to save (MPS), tax (MPT), and import (MPM)."
         ],
-        formula: 'Multiplier k = 1 / (MPS + MPT + MPM)',
-        bodyAfter: [
-          'A $1 billion rise in G with MPS = 0.2, MPT = 0.2, MPM = 0.2 → multiplier = 1/0.6 ≈ 1.67, raising GDP by ~$1.67 billion.',
-          'Higher leakages = smaller multiplier. Open economies with high MPM have smaller multipliers than closed economies.',
+        "formula": "Multiplier k = 1 / (MPS + MPT + MPM)",
+        "bodyAfter": [
+          "A $1 billion rise in G with MPS = 0.2, MPT = 0.2, MPM = 0.2 → multiplier = 1/0.6 ≈ 1.67, raising GDP by ~$1.67 billion.",
+          "Higher leakages = smaller multiplier. Open economies with high MPM have smaller multipliers than closed economies."
         ],
-        diagram: null,
-        keyTerms: ['Keynesian multiplier', 'marginal propensity to consume (MPC)', 'marginal propensity to save (MPS)', 'marginal propensity to import (MPM)', 'marginal propensity to tax (MPT)'],
+        "diagram": null,
+        "keyTerms": [
+          "Keynesian multiplier",
+          "marginal propensity to consume (MPC)",
+          "marginal propensity to save (MPS)",
+          "marginal propensity to import (MPM)",
+          "marginal propensity to tax (MPT)"
+        ],
+        "keyTakeaways": [
+          "Crowding out is the main monetarist objection to fiscal policy. The Keynesian response is that crowding out is small in a recession.",
+          "The simple spending multiplier is 1 / (1 − MPC). A higher MPC means a bigger multiplier."
+        ],
+        "workedExample": {
+          "title": "Computing the multiplier impact",
+          "scenario": "MPC = 0.8. The government increases G by $100 million with no change in taxes. What is the total increase in AD?",
+          "steps": [
+            "Spending multiplier = 1 / (1 − MPC) = 1 / (1 − 0.8) = 1 / 0.2 = 5.",
+            "Total ΔAD = 5 × ΔG = 5 × 100 = $500 million."
+          ],
+          "answer": "AD rises by $500 million. The first round is the $100m of G; subsequent rounds are the 0.8 × $100m of consumption, the 0.8 × $80m of further consumption, etc., summing to 5×."
+        }
       },
       {
-        id: '3.6.4',
-        title: 'Automatic stabilisers and discretionary policy',
-        minutes: 6,
-        body: [
-          'Automatic stabilisers: progressive income tax (revenue falls automatically in a downturn) and unemployment benefits (spending rises automatically). They cushion the cycle without any new government action.',
-          'Discretionary policy: deliberate changes to G or T decided by the government (e.g. a stimulus package). Slower — political lags, recognition lags, implementation lags.',
+        "id": "3.6.4",
+        "title": "Automatic stabilisers and discretionary policy",
+        "minutes": 6,
+        "body": [
+          "Automatic stabilisers: progressive income tax (revenue falls automatically in a downturn) and unemployment benefits (spending rises automatically). They cushion the cycle without any new government action.",
+          "Discretionary policy: deliberate changes to G or T decided by the government (e.g. a stimulus package). Slower — political lags, recognition lags, implementation lags."
         ],
-        diagram: null,
-        keyTerms: ['automatic stabiliser', 'discretionary fiscal policy', 'implementation lag', 'recognition lag'],
+        "diagram": null,
+        "keyTerms": [
+          "automatic stabiliser",
+          "discretionary fiscal policy",
+          "implementation lag",
+          "recognition lag"
+        ],
+        "keyTakeaways": [
+          "The simple spending multiplier is 1 / (1 − MPC). A higher MPC means a bigger multiplier.",
+          "A balanced-budget multiplier of 1 means ΔG = ΔT raises AD by exactly the size of the G increase."
+        ]
       },
       {
-        id: '3.6.5',
-        title: '(HL) Crowding out and effectiveness',
-        minutes: 7,
-        body: [
-          'Crowding out: when expansionary fiscal policy raises interest rates and reduces private investment (I), partially offsetting the boost to AD.',
-          'More likely in economies near full employment, with high private-sector credit demand, and where the central bank does not accommodate the fiscal expansion.',
-          'Effectiveness constraints: political pressure, time lags, sustainable debt, crowding out (HL).',
-          'Strengths: can target specific sectors, effective in deep recession when monetary policy is constrained.',
+        "id": "3.6.5",
+        "title": "(HL) Crowding out and effectiveness",
+        "minutes": 7,
+        "body": [
+          "Crowding out: when expansionary fiscal policy raises interest rates and reduces private investment (I), partially offsetting the boost to AD.",
+          "More likely in economies near full employment, with high private-sector credit demand, and where the central bank does not accommodate the fiscal expansion.",
+          "Effectiveness constraints: political pressure, time lags, sustainable debt, crowding out (HL).",
+          "Strengths: can target specific sectors, effective in deep recession when monetary policy is constrained."
         ],
-        diagram: 'crowdingOut',
-        keyTerms: ['crowding out', 'sustainable debt', 'debt servicing'],
-      },
-    ],
+        "diagram": "crowdingOut",
+        "keyTerms": [
+          "crowding out",
+          "sustainable debt",
+          "debt servicing"
+        ],
+        "keyTakeaways": [
+          "A balanced-budget multiplier of 1 means ΔG = ΔT raises AD by exactly the size of the G increase.",
+          "Crowding out is the main monetarist objection to fiscal policy. The Keynesian response is that crowding out is small in a recession."
+        ],
+        "commonMistakes": [
+          "Crowding out is NOT a fixed amount. It depends on whether the economy is at full employment (large) or in a slump (small)."
+        ]
+      }
+    ]
   },
   {
-    id: '3.7',
-    code: '3.7',
-    title: 'Supply-side policies',
-    blurb: 'Shifting the whole curve right, not just chasing the gap — long-term growth through productivity.',
-    outcomes: [
-      'Distinguish market-based and interventionist supply-side policies, with examples.',
-      'Explain the demand-side and supply-side effects of supply-side policies.',
-      'Evaluate the effectiveness of supply-side policies using appropriate criteria.',
+    "id": "3.7",
+    "code": "3.7",
+    "title": "Supply-side policies",
+    "blurb": "Shifting the whole curve right, not just chasing the gap — long-term growth through productivity.",
+    "outcomes": [
+      "Distinguish market-based and interventionist supply-side policies, with examples.",
+      "Explain the demand-side and supply-side effects of supply-side policies.",
+      "Evaluate the effectiveness of supply-side policies using appropriate criteria."
     ],
-    lessons: [
+    "lessons": [
       {
-        id: '3.7.1',
-        title: 'Goals of supply-side policy',
-        minutes: 5,
-        body: [
-          'Supply-side policies aim to increase the economy\'s productive capacity over the long term — they shift LRAS (and, in Keynesian models, the long-run AS curve) to the right.',
-          'Other goals: improve competition and efficiency, lower labour costs, reduce inflation, raise incentives to invest.',
+        "id": "3.7.1",
+        "title": "Goals of supply-side policy",
+        "minutes": 5,
+        "body": [
+          "Supply-side policies aim to increase the economy's productive capacity over the long term — they shift LRAS (and, in Keynesian models, the long-run AS curve) to the right.",
+          "Other goals: improve competition and efficiency, lower labour costs, reduce inflation, raise incentives to invest."
         ],
-        diagram: 'adas',
-        keyTerms: ['supply-side policy', 'LRAS shift', 'productive capacity'],
+        "diagram": "adas",
+        "keyTerms": [
+          "supply-side policy",
+          "LRAS shift",
+          "productive capacity"
+        ],
+        "keyTakeaways": [
+          "Supply-side policies aim to shift LRAS right. They are slow-acting (years) but raise the economy's potential output.",
+          "Market-based policies cut marginal tax rates, deregulate, and liberalise trade. They are politically popular but can increase inequality."
+        ]
       },
       {
-        id: '3.7.2',
-        title: 'Market-based policies',
-        minutes: 7,
-        body: [
-          'Pro-competition: deregulation, privatisation, trade liberalisation, anti-monopoly regulation.',
-          'Labour market flexibility: weakening trade unions, reducing unemployment benefits, abolishing minimum wages (often criticised for equity effects).',
-          'Incentive policies: cuts to personal income tax, business tax, capital gains tax.',
-          'Strengths: improved resource allocation, lower burden on government budget. Weaknesses: equity issues, time lags, environmental impact, vested interests.',
+        "id": "3.7.2",
+        "title": "Market-based policies",
+        "minutes": 7,
+        "body": [
+          "Pro-competition: deregulation, privatisation, trade liberalisation, anti-monopoly regulation.",
+          "Labour market flexibility: weakening trade unions, reducing unemployment benefits, abolishing minimum wages (often criticised for equity effects).",
+          "Incentive policies: cuts to personal income tax, business tax, capital gains tax.",
+          "Strengths: improved resource allocation, lower burden on government budget. Weaknesses: equity issues, time lags, environmental impact, vested interests."
         ],
-        diagram: 'adas',
-        keyTerms: ['deregulation', 'privatisation', 'trade liberalisation', 'labour market flexibility', 'anti-monopoly regulation'],
+        "diagram": "adas",
+        "keyTerms": [
+          "deregulation",
+          "privatisation",
+          "trade liberalisation",
+          "labour market flexibility",
+          "anti-monopoly regulation"
+        ],
+        "keyTakeaways": [
+          "Market-based policies cut marginal tax rates, deregulate, and liberalise trade. They are politically popular but can increase inequality.",
+          "Interventionist policies invest in infrastructure, education, training, and industrial strategy. They address market failures but risk \"picking winners\"."
+        ],
+        "workedExample": {
+          "title": "Estimating a tax-cut effect on labour supply",
+          "scenario": "A country cuts the top marginal income tax rate from 50% to 40%. The labour-supply elasticity is 0.3. By how much does labour supply rise?",
+          "steps": [
+            "Percentage change in the after-tax wage = (1 − 0.40) / (1 − 0.50) − 1 = 0.60 / 0.50 − 1 = 1.20 − 1 = 20%.",
+            "Percentage change in labour supply = elasticity × percentage change in wage = 0.3 × 20% = 6%."
+          ],
+          "answer": "Labour supply rises by 6%. The tax cut pays for itself partially through higher output and tax revenue, but only if the labour-supply elasticity is meaningfully positive."
+        }
       },
       {
-        id: '3.7.3',
-        title: 'Interventionist policies',
-        minutes: 6,
-        body: [
-          'Human capital: education, training, healthcare (quality, quantity, access).',
-          'Infrastructure: transport, energy, digital.',
-          'Research and development: grants, tax credits, public research bodies.',
-          'Industrial policy: targeted support for specific sectors (e.g. semiconductors, green tech).',
-          'Strengths: directly supports sectors important for growth. Weaknesses: cost, time lags, government failure risk (picking winners).',
+        "id": "3.7.3",
+        "title": "Interventionist policies",
+        "minutes": 6,
+        "body": [
+          "Human capital: education, training, healthcare (quality, quantity, access).",
+          "Infrastructure: transport, energy, digital.",
+          "Research and development: grants, tax credits, public research bodies.",
+          "Industrial policy: targeted support for specific sectors (e.g. semiconductors, green tech).",
+          "Strengths: directly supports sectors important for growth. Weaknesses: cost, time lags, government failure risk (picking winners)."
         ],
-        diagram: 'adas',
-        keyTerms: ['interventionist supply-side policy', 'industrial policy', 'infrastructure investment', 'human capital', 'R&D'],
+        "diagram": "adas",
+        "keyTerms": [
+          "interventionist supply-side policy",
+          "industrial policy",
+          "infrastructure investment",
+          "human capital",
+          "R&D"
+        ],
+        "keyTakeaways": [
+          "Interventionist policies invest in infrastructure, education, training, and industrial strategy. They address market failures but risk \"picking winners\".",
+          "Supply-side policies aim to shift LRAS right. They are slow-acting (years) but raise the economy's potential output."
+        ]
       },
       {
-        id: '3.7.4',
-        title: 'Effectiveness of supply-side policies',
-        minutes: 6,
-        body: [
-          'Evaluate using: time lags, fiscal cost, equity impact, sustainability, political feasibility, and how easy the policy is to reverse.',
-          'Market-based policies tend to act faster on incentives but raise equity concerns.',
-          'Interventionist policies can be precisely targeted but take longer to flow through to LRAS.',
-          'A balanced mix is usually best — relying on only one type has predictable limits.',
+        "id": "3.7.4",
+        "title": "Effectiveness of supply-side policies",
+        "minutes": 6,
+        "body": [
+          "Evaluate using: time lags, fiscal cost, equity impact, sustainability, political feasibility, and how easy the policy is to reverse.",
+          "Market-based policies tend to act faster on incentives but raise equity concerns.",
+          "Interventionist policies can be precisely targeted but take longer to flow through to LRAS.",
+          "A balanced mix is usually best — relying on only one type has predictable limits."
         ],
-        diagram: null,
-        keyTerms: ['government failure', 'picking winners', 'time lag (supply-side)'],
-      },
-    ],
-  },
+        "diagram": null,
+        "keyTerms": [
+          "government failure",
+          "picking winners",
+          "time lag (supply-side)"
+        ],
+        "keyTakeaways": [
+          "Supply-side policies aim to shift LRAS right. They are slow-acting (years) but raise the economy's potential output.",
+          "Market-based policies cut marginal tax rates, deregulate, and liberalise trade. They are politically popular but can increase inequality."
+        ],
+        "commonMistakes": [
+          "Supply-side policies do not raise AD — they shift LRAS right. If the economy is in a recession, demand-side stimulus is needed first."
+        ]
+      }
+    ]
+  }
 ];
 // Glossary — every key term in the IBDP Economics Unit 3 (Macroeconomics) syllabus.
 // Deduplicated, alphabetised, and grouped by topic for easy auditing. 374 entries.
