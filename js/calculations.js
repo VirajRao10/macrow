@@ -75,3 +75,19 @@ export const adLineSegment=adShiftY=>{
   const m=-GRAPH.adSlope,b=GRAPH.adIntercept+GRAPH.adSlope*(GRAPH.adPivotY+adShiftY);
   return {m,b,seg:clipLineToBox(m,b,GRAPH)};
 };
+
+// Returns two stroke-friendly line segments approximating the SRAS shape
+// (flat horizontal portion + vertical portion at the kink). Used by
+// long-run equilibrium and other diagrams that want to draw the SRAS as
+// a piecewise linear line rather than the full Catmull-Rom curve.
+export const asLineSegments=(asShiftP,yFe)=>{
+  const as=ASshape({asShiftP:asShiftP||0,yFe:yFe});
+  return {
+    yKink:as.yKink,
+    pFlat:as.pFlat,
+    yFe:as.yFe,
+    pEnd:as.pEnd,
+    seg1:[[GRAPH.Ymin,as.pFlat],[as.yKink,as.pFlat]],
+    seg2:[[as.yFe,as.pEnd],[as.yFe,GRAPH.Pmax-6]]
+  };
+};
