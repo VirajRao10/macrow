@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#FAF8F4" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0B1220" media="(prefers-color-scheme: dark)" />
-  <title>macrow — Interactive IB AD–AS</title>
+  <title>macrow — IBDP Economics · Macroeconomics</title>
 
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./styles.css" />
@@ -17,7 +17,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
   <script>
-    // Apply theme before first paint to avoid FOUC.
     (function () {
       try {
         var k = 'macrow_theme_mode_v1';
@@ -35,22 +34,19 @@
   <header class="topbar">
     <button id="btnSidebarOpen" class="iconBtn sidebarToggle" type="button" aria-label="Open navigation" aria-controls="primaryNav" aria-expanded="false">
       <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-        <line x1="3" y1="5" x2="17" y2="5"/>
-        <line x1="3" y1="10" x2="17" y2="10"/>
-        <line x1="3" y1="15" x2="17" y2="15"/>
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
       </svg>
     </button>
-    <a class="brand" href="./" aria-label="macrow home">
+    <a class="brand" href="#" data-nav="home" aria-label="macrow home">
       <img class="brand__logo" src="./assets/macrow-logo.png" alt="" width="36" height="36" />
       <span class="brand__text">
         <span class="brand__name">macrow</span>
-        <span class="brand__tag">AD–AS, simplified and interactive</span>
+        <span class="brand__tag">IBDP Economics · Macroeconomics</span>
       </span>
     </a>
     <div class="topbar__actions">
       <button id="themeToggle" class="iconBtn themeToggle" type="button" aria-pressed="false" aria-label="Switch to dark mode">
         <span class="themeToggle__icon" aria-hidden="true">☀️</span>
-        <span class="themeToggle__label">Light theme</span>
       </button>
     </div>
   </header>
@@ -62,55 +58,45 @@
       <span class="sidebar__title">Sections</span>
       <button id="btnSidebarClose" class="iconBtn" type="button" aria-label="Close navigation">
         <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <line x1="5" y1="5" x2="15" y2="15"/>
-          <line x1="15" y1="5" x2="5" y2="15"/>
+          <line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/>
         </svg>
       </button>
     </div>
     <ul class="sidebar__list" role="list">
       <li>
-        <button class="navBtn navBtn--active" data-tab="diagram" type="button" aria-current="page">
+        <button class="navBtn" data-nav="home" type="button">
+          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+          </svg>
+          <span>Home</span>
+        </button>
+      </li>
+      <li>
+        <button class="navBtn" data-nav="course" type="button">
+          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 5h11a3 3 0 0 1 3 3v12H7a3 3 0 0 1-3-3z"/><path d="M4 5v12"/><path d="M9 9h6"/>
+          </svg>
+          <span>Course</span>
+        </button>
+      </li>
+      <li>
+        <button class="navBtn" data-nav="simulator" type="button">
           <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 20h18"/><path d="M5 20V8"/><path d="M19 20V4"/><path d="M5 12c4 0 4-3 8-3s4 3 6 3"/>
           </svg>
-          <span>Diagram</span>
+          <span>Simulator</span>
         </button>
       </li>
       <li>
-        <button class="navBtn" data-tab="policies" type="button">
+        <button class="navBtn" data-nav="glossary" type="button">
           <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h13"/>
+            <path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>
           </svg>
-          <span>Policies</span>
+          <span>Glossary</span>
         </button>
       </li>
       <li>
-        <button class="navBtn" data-tab="parameters" type="button">
-          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/>
-            <circle cx="9" cy="7" r="2.2" fill="var(--bg)"/><circle cx="15" cy="17" r="2.2" fill="var(--bg)"/>
-          </svg>
-          <span>Parameters</span>
-        </button>
-      </li>
-      <li>
-        <button id="btnScenarios" class="navBtn" type="button" aria-haspopup="dialog">
-          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 7h16v12H4z"/><path d="M4 7l2-3h12l2 3"/><path d="M9 12h6"/>
-          </svg>
-          <span>Scenarios</span>
-        </button>
-      </li>
-      <li>
-        <button class="navBtn" data-tab="learn" type="button">
-          <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 6l9-3 9 3-9 3z"/><path d="M7 8v6c0 1.5 2.5 3 5 3s5-1.5 5-3V8"/>
-          </svg>
-          <span>Learn</span>
-        </button>
-      </li>
-      <li>
-        <button class="navBtn" data-tab="about" type="button">
+        <button class="navBtn" data-nav="about" type="button">
           <svg class="navIcon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/>
           </svg>
@@ -119,140 +105,277 @@
       </li>
     </ul>
     <div class="sidebar__foot">
-      <span class="sidebar__hint">macrow · v1</span>
+      <span class="sidebar__hint">macrow · v2</span>
     </div>
   </nav>
 
   <main id="mainContent" class="shell" tabindex="-1">
-    <section class="mainGrid">
-      <!-- Chart card (always visible) -->
-      <div class="card chartCard" id="panelDiagram">
-        <div class="cardHeader">
-          <div>
-            <div class="cardTitle">Keynesian AD–AS diagram</div>
-            <div class="cardSubtitle">Interactive IB-format simulator</div>
-          </div>
-          <div class="legend">
-            <div class="legendItem"><span class="dot dot--ad"></span><span>AD (demand)</span></div>
-            <div class="legendItem"><span class="dot dot--as"></span><span>SRAS (supply)</span></div>
-            <div class="legendItem"><span class="dot dot--lras"></span><span>Yf (potential)</span></div>
-          </div>
-        </div>
-
-        <div class="chartWrap">
-          <svg id="chartSvg" viewBox="0 0 860 560" width="100%" height="100%" aria-label="Keynesian AD-AS chart"></svg>
-        </div>
-
-        <div class="underChart">
-          <div class="chipsRow">
-            <div id="changeChips" class="chips"></div>
-            <div id="gapLabel" class="stateLabel" role="status" aria-live="polite" aria-atomic="true">State: —</div>
-          </div>
-
-          <div class="eqSummary" aria-live="polite" aria-atomic="true">
-            <div class="eqSummary__stat">
-              <div class="eqSummary__label">Equilibrium output (Y)</div>
-              <div class="eqSummary__value" id="statOutputValue">—</div>
-              <div class="eqSummary__delta" id="statOutputDelta">Δ —</div>
-            </div>
-            <div class="eqSummary__stat">
-              <div class="eqSummary__label">Price level (P)</div>
-              <div class="eqSummary__value" id="statPriceValue">—</div>
-              <div class="eqSummary__delta" id="statPriceDelta">Δ —</div>
-            </div>
-            <div class="eqSummary__stat">
-              <div class="eqSummary__label">Potential output (Yf)</div>
-              <div class="eqSummary__value" id="statPotentialValue">—</div>
-              <div class="eqSummary__delta" id="statPotentialDelta">Δ —</div>
-            </div>
-          </div>
-
-          <div id="underGraphFormula" class="formulaBlock hidden">
-            <div class="formulaTitle">Aggregate Demand</div>
-            <div class="formulaEq">AD = C + I + G + (X − M)</div>
-          </div>
-
-          <div class="chartControls">
-            <label class="toggle">
-              <input id="toggleAxisNumbers" type="checkbox" checked />
-              <span>Show axis numbers</span>
-            </label>
-            <button id="btnExportPng" class="btn btn--ghost">Export PNG</button>
-            <button id="btnExportSvg" class="btn btn--ghost">Export SVG</button>
-          </div>
-
-          <div class="quickActions" aria-label="Scenario quick actions">
-            <button id="btnMakeRecession" class="actionCard actionCard--recession">
-              <span class="actionCard__title">Recessionary gap</span>
-              <span class="actionCard__text">AD shifts left, output falls below Yf</span>
-            </button>
-            <button id="btnMakeDemandPull" class="actionCard actionCard--demand">
-              <span class="actionCard__title">Demand-pull inflation</span>
-              <span class="actionCard__text">AD shifts right, prices and output rise</span>
-            </button>
-            <button id="btnMakeCostPush" class="actionCard actionCard--cost">
-              <span class="actionCard__title">Cost-push inflation</span>
-              <span class="actionCard__text">AS shifts left from cost pressure</span>
-            </button>
-            <button id="btnClearGap" class="actionCard actionCard--clear">
-              <span class="actionCard__title">Reset to baseline</span>
-              <span class="actionCard__text">Clear all shifts, return to neutral</span>
-            </button>
-          </div>
-
-          <div class="sharePrompt">
-            <button id="btnOpenSharePanel" class="btn btn--primary btn--full" type="button">Share this scenario</button>
-          </div>
-          <div id="sharePanel" class="sharePanel hidden" aria-live="polite">
-            <div class="sharePanel__header">
-              <div>
-                <div class="sharePanel__title">Scenario sharing</div>
-                <div class="sharePanel__hint">Copy a link or scan the QR to load the same setup anywhere.</div>
-              </div>
-              <button id="btnCloseSharePanel" class="iconBtn" type="button" aria-label="Close share tools">✕</button>
-            </div>
-            <div class="sharePanel__controls">
-              <button id="btnShareLinkPanel" class="btn btn--primary" type="button">Copy share link</button>
-              <button id="btnShowShareQrPanel" class="btn btn--ghost" type="button">View QR code</button>
-              <button id="btnShareScanQr" class="btn btn--ghost" type="button">Scan QR code</button>
-            </div>
-            <div id="shareLinkPreview" class="sharePanel__link hidden" tabindex="0" role="status"></div>
-            <div id="shareQrPreview" class="sharePreview hidden"></div>
-            <div id="shareScannerArea" class="shareScanner hidden" aria-live="polite">
-              <div class="shareScanner__header">
-                <div class="shareScanner__title">Load scenario from QR</div>
-              </div>
-              <video id="shareQrVideo" playsinline muted autoplay></video>
-              <canvas id="shareQrCanvas" class="hidden shareScanner__canvas"></canvas>
-              <div id="shareScannerHint" class="sectionHint shareScanner__hint">Allow camera access and point at a Macrow scenario QR code.</div>
-              <div class="shareScanner__actions">
-                <button id="btnShareScannerStop" class="btn btn--ghost btn--mini" type="button">Stop scanning</button>
-              </div>
-            </div>
-          </div>
+    <!-- HOME -->
+    <section class="view view--home" data-view="home">
+      <div class="page page--narrow">
+        <p class="page__eyebrow">Macroeconomics · IBDP</p>
+        <h1 class="page__title">A clear path through macro</h1>
+        <p class="page__lede">Learn the syllabus in the order economists think about it: from measurement, to AD–AS, to the policies that move the curves. Then run scenarios in the simulator to test what you just learned.</p>
+        <div class="page__actions">
+          <button class="btn btn--primary" type="button" data-action="resume">Continue learning</button>
+          <button class="btn btn--ghost" type="button" data-action="start-course">Start from the beginning</button>
         </div>
       </div>
 
-      <!-- Side panel for secondary content (policies, parameters, learn, about) -->
-      <aside class="card sideCard" aria-label="Section content">
-        <div class="sideHeader">
-          <div id="panelTitle" class="sideTitle">Diagram</div>
-          <button id="btnReset" class="btn btn--ghost btn--mini" type="button" aria-label="Reset parameters">Reset</button>
+      <div class="page page--wide">
+        <div class="card continueCard" id="continueCard" hidden>
+          <div class="continueCard__body">
+            <div class="continueCard__meta" id="continueMeta">Pick up where you left off</div>
+            <div class="continueCard__title" id="continueTitle">—</div>
+            <div class="continueCard__sub" id="continueSub">—</div>
+          </div>
+          <button class="btn btn--primary" type="button" data-action="resume">Open lesson</button>
+        </div>
+      </div>
+
+      <div class="page page--wide">
+        <div class="progressRow">
+          <div class="progressRow__label">Course progress</div>
+          <div class="progressRow__bar"><div class="progressRow__fill" id="progressFill" style="width: 0%"></div></div>
+          <div class="progressRow__count" id="progressCount">0 / 0</div>
+        </div>
+      </div>
+
+      <div class="page page--wide">
+        <h2 class="sectionHeading">Syllabus</h2>
+        <p class="sectionSub">Seven modules, all of Unit 3 (Macroeconomics).</p>
+        <div class="moduleGrid" id="moduleGrid"></div>
+      </div>
+    </section>
+
+    <!-- COURSE -->
+    <section class="view view--course" data-view="course" hidden>
+      <nav class="breadcrumb" id="courseBreadcrumb" aria-label="Breadcrumb">
+        <a href="#" data-nav="home">Home</a>
+        <span class="breadcrumb__sep" aria-hidden="true">›</span>
+        <span class="breadcrumb__current">Course</span>
+      </nav>
+
+      <div class="page page--wide" id="courseIndex">
+        <p class="page__eyebrow">Unit 3</p>
+        <h1 class="page__title">Course</h1>
+        <p class="page__lede">All seven macro modules, in syllabus order. Tap a module to open its lessons.</p>
+        <div class="filterRow">
+          <label class="filterChip"><input type="radio" name="courseFilter" value="all" checked /><span>All</span></label>
+          <label class="filterChip"><input type="radio" name="courseFilter" value="inprogress" /><span>In progress</span></label>
+          <label class="filterChip"><input type="radio" name="courseFilter" value="completed" /><span>Completed</span></label>
+        </div>
+        <ol class="moduleList" id="moduleList"></ol>
+      </div>
+
+      <div class="page page--wide" id="moduleView" hidden>
+        <button class="linkBack" type="button" data-action="back-to-course">← Back to Course</button>
+        <p class="page__eyebrow" id="moduleCode">3.1</p>
+        <h1 class="page__title" id="moduleTitle">Module</h1>
+        <p class="page__lede" id="moduleBlurb">—</p>
+        <div class="outcomesBox">
+          <div class="outcomesBox__title">Learning outcomes</div>
+          <ul class="outcomesList" id="moduleOutcomes"></ul>
+        </div>
+        <h2 class="sectionHeading">Lessons</h2>
+        <ol class="lessonList" id="lessonList"></ol>
+      </div>
+    </section>
+
+    <!-- LESSON -->
+    <section class="view view--lesson" data-view="lesson" hidden>
+      <div class="page page--narrow">
+        <nav class="breadcrumb" id="lessonBreadcrumb" aria-label="Breadcrumb">
+          <a href="#" data-nav="course">Course</a>
+          <span class="breadcrumb__sep" aria-hidden="true">›</span>
+          <a href="#" data-action="back-to-module" id="lessonModuleLink">3.1</a>
+          <span class="breadcrumb__sep" aria-hidden="true">›</span>
+          <span class="breadcrumb__current" id="lessonCrumbTitle">Lesson</span>
+        </nav>
+
+        <p class="page__eyebrow" id="lessonCode">3.1.1</p>
+        <h1 class="page__title" id="lessonTitle">Lesson</h1>
+        <div class="lessonMeta">
+          <span class="lessonMeta__chip" id="lessonTime">8 min</span>
+          <span class="lessonMeta__chip lessonMeta__chip--muted" id="lessonStatus">Not started</span>
         </div>
 
-        <div id="panelPolicies" class="hidden" role="region" aria-label="Policies"></div>
-        <div id="panelParameters" class="hidden" role="region" aria-label="Parameters"></div>
-        <div id="panelLearn" class="hidden" role="region" aria-label="Learn"></div>
-        <div id="panelAbout" class="hidden" role="region" aria-label="About"></div>
-        <div id="panelScenarios" class="hidden" role="region" aria-label="Scenarios">
-          <div class="sectionTitle">Scenarios</div>
-          <div class="sectionHint">Use the sidebar Scenarios button to open the manager, or jump in:</div>
-          <button class="btn btn--primary" type="button" onclick="document.getElementById('btnScenarios').click()">Open scenario manager</button>
+        <article class="lessonBody" id="lessonBody"></article>
+
+        <section class="keyTermsBox" id="keyTermsBox" hidden>
+          <div class="keyTermsBox__title">Key terms in this lesson</div>
+          <div class="keyTerms" id="keyTermsList"></div>
+        </section>
+
+        <div class="lessonNav">
+          <button class="btn btn--ghost" type="button" id="lessonPrev">← Previous</button>
+          <div class="lessonNav__center">
+            <button class="btn btn--primary" type="button" id="lessonComplete" hidden>Mark as complete</button>
+            <button class="btn btn--primary" type="button" id="lessonCompleted" hidden disabled>✓ Completed</button>
+          </div>
+          <button class="btn btn--ghost" type="button" id="lessonNext">Next →</button>
         </div>
-      </aside>
+      </div>
+    </section>
+
+    <!-- SIMULATOR -->
+    <section class="view view--simulator" data-view="simulator" hidden>
+      <div class="page page--wide">
+        <p class="page__eyebrow">Free simulator</p>
+        <h1 class="page__title">Test the policies in real time</h1>
+        <p class="page__lede">Move the parameters and watch the AD–AS diagram update. Presets are keyed to specific syllabus lessons so you can rehearse what you just learned.</p>
+
+        <div class="simLayout">
+          <div class="card chartCard" id="panelDiagram">
+            <div class="cardHeader">
+              <div>
+                <div class="cardTitle">AD–AS diagram</div>
+                <div class="cardSubtitle">Live simulator</div>
+              </div>
+              <div class="legend">
+                <div class="legendItem"><span class="dot dot--ad"></span><span>AD</span></div>
+                <div class="legendItem"><span class="dot dot--as"></span><span>SRAS</span></div>
+                <div class="legendItem"><span class="dot dot--lras"></span><span>Yf</span></div>
+              </div>
+            </div>
+            <div class="chartWrap">
+              <svg id="chartSvg" viewBox="0 0 860 560" width="100%" height="100%" aria-label="AD-AS chart"></svg>
+            </div>
+            <div class="underChart">
+              <div class="chipsRow">
+                <div id="changeChips" class="chips"></div>
+                <div id="gapLabel" class="stateLabel">State: —</div>
+              </div>
+              <div class="eqSummary" aria-live="polite">
+                <div class="eqSummary__stat"><div class="eqSummary__label">Equilibrium output (Y)</div><div class="eqSummary__value" id="statOutputValue">—</div><div class="eqSummary__delta" id="statOutputDelta">Δ —</div></div>
+                <div class="eqSummary__stat"><div class="eqSummary__label">Price level (P)</div><div class="eqSummary__value" id="statPriceValue">—</div><div class="eqSummary__delta" id="statPriceDelta">Δ —</div></div>
+                <div class="eqSummary__stat"><div class="eqSummary__label">Potential output (Yf)</div><div class="eqSummary__value" id="statPotentialValue">—</div><div class="eqSummary__delta" id="statPotentialDelta">Δ —</div></div>
+              </div>
+              <div class="chartControls">
+                <label class="toggle"><input id="toggleAxisNumbers" type="checkbox" checked /><span>Axis numbers</span></label>
+                <button id="btnExportPng" class="btn btn--ghost btn--mini">Export PNG</button>
+                <button id="btnExportSvg" class="btn btn--ghost btn--mini">Export SVG</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="card simSide">
+            <div class="sideHeader">
+              <div class="sideTitle">Presets &amp; controls</div>
+              <button id="btnReset" class="btn btn--ghost btn--mini" type="button">Reset</button>
+            </div>
+            <div class="sideBody">
+              <div class="sideSection">
+                <div class="sideSection__title">Syllabus presets</div>
+                <div class="presetList">
+                  <button class="presetBtn" data-preset="baseline">Baseline (start here)</button>
+                  <button class="presetBtn" data-preset="recession">3.2.4 Recessionary gap</button>
+                  <button class="presetBtn" data-preset="demandPull">3.3.3 Demand-pull inflation</button>
+                  <button class="presetBtn" data-preset="costPush">3.3.3 Cost-push inflation</button>
+                  <button class="presetBtn" data-preset="expFiscal">3.6.2 Expansionary fiscal</button>
+                  <button class="presetBtn" data-preset="conFiscal">3.6.2 Contractionary fiscal</button>
+                  <button class="presetBtn" data-preset="expMonetary">3.5.4 Expansionary monetary</button>
+                  <button class="presetBtn" data-preset="conMonetary">3.5.4 Contractionary monetary</button>
+                  <button class="presetBtn" data-preset="supplyReform">3.7.2 Market-based supply-side</button>
+                  <button class="presetBtn" data-preset="supplyInvest">3.7.3 Interventionist supply-side</button>
+                </div>
+              </div>
+              <div class="sideSection">
+                <div class="sideSection__title">Parameters</div>
+                <div id="panelParameters"></div>
+              </div>
+              <div class="sideSection">
+                <div class="sideSection__title">Quick scenarios</div>
+                <div class="quickActions">
+                  <button class="actionCard actionCard--recession" id="btnMakeRecession"><span class="actionCard__title">Recessionary gap</span><span class="actionCard__text">AD shifts left</span></button>
+                  <button class="actionCard actionCard--demand" id="btnMakeDemandPull"><span class="actionCard__title">Demand-pull inflation</span><span class="actionCard__text">AD shifts right</span></button>
+                  <button class="actionCard actionCard--cost" id="btnMakeCostPush"><span class="actionCard__title">Cost-push inflation</span><span class="actionCard__text">SRAS shifts left</span></button>
+                  <button class="actionCard actionCard--clear" id="btnClearGap"><span class="actionCard__title">Reset to baseline</span><span class="actionCard__text">Clear all shifts</span></button>
+                </div>
+              </div>
+              <div class="sideSection">
+                <button class="btn btn--primary btn--full" type="button" id="btnOpenSharePanel">Share this scenario</button>
+                <div id="sharePanel" class="sharePanel hidden">
+                  <div class="sharePanel__header">
+                    <div>
+                      <div class="sharePanel__title">Scenario sharing</div>
+                      <div class="sharePanel__hint">Copy a link to load this setup anywhere.</div>
+                    </div>
+                    <button id="btnCloseSharePanel" class="iconBtn" type="button" aria-label="Close share tools">✕</button>
+                  </div>
+                  <div class="sharePanel__controls">
+                    <button id="btnShareLinkPanel" class="btn btn--primary btn--mini" type="button">Copy share link</button>
+                    <button id="btnShowShareQrPanel" class="btn btn--ghost btn--mini" type="button">View QR code</button>
+                    <button id="btnShareScanQr" class="btn btn--ghost btn--mini" type="button">Scan QR</button>
+                  </div>
+                  <div id="shareLinkPreview" class="sharePanel__link hidden" tabindex="0" role="status"></div>
+                  <div id="shareQrPreview" class="sharePreview hidden"></div>
+                  <div id="shareScannerArea" class="shareScanner hidden">
+                    <div class="shareScanner__title">Load scenario from QR</div>
+                    <video id="shareQrVideo" playsinline muted autoplay></video>
+                    <canvas id="shareQrCanvas" class="hidden shareScanner__canvas"></canvas>
+                    <div id="shareScannerHint" class="sectionHint shareScanner__hint">Allow camera access and point at a Macrow scenario QR code.</div>
+                    <button id="btnShareScannerStop" class="btn btn--ghost btn--mini" type="button">Stop scanning</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- GLOSSARY -->
+    <section class="view view--glossary" data-view="glossary" hidden>
+      <div class="page page--narrow">
+        <p class="page__eyebrow">Reference</p>
+        <h1 class="page__title">Glossary</h1>
+        <p class="page__lede">Every key term in the syllabus, in one searchable place.</p>
+        <div class="searchBox">
+          <svg class="searchBox__icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="search" id="glossarySearch" class="searchBox__input" placeholder="Search terms..." aria-label="Search glossary" />
+        </div>
+        <div class="glossaryList" id="glossaryList"></div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="view view--about" data-view="about" hidden>
+      <div class="page page--narrow">
+        <p class="page__eyebrow">About</p>
+        <h1 class="page__title">About macrow</h1>
+        <p class="page__lede">Macrow is a learning tool for the macroeconomics portion of the IBDP Economics syllabus. It walks you through the syllabus with explanations and diagrams, then lets you rehearse the policy tools in a free simulator.</p>
+
+        <div class="aboutGrid">
+          <div class="card aboutCard">
+            <div class="aboutCard__title">Author</div>
+            <p>Built by <a class="link" href="https://linkedin.com/in/virajrao1" target="_blank" rel="noopener noreferrer">Viraj Rao</a>. Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a>.</p>
+          </div>
+          <div class="card aboutCard">
+            <div class="aboutCard__title">Coming next</div>
+            <p><b>Microw</b> — the microeconomics companion, planned for the future.</p>
+          </div>
+          <div class="card aboutCard">
+            <div class="aboutCard__title">Accessibility</div>
+            <label class="toggle"><input id="toggleAccess" type="checkbox" /><span>High contrast + larger controls</span></label>
+          </div>
+          <div class="card aboutCard">
+            <div class="aboutCard__title">Shortcuts</div>
+            <button class="btn btn--ghost" type="button" id="btnOpenShortcuts">Open keyboard shortcuts</button>
+            <ul class="shortcutList">
+              <li><kbd>g</kbd> then <kbd>h</kbd> Go home</li>
+              <li><kbd>g</kbd> then <kbd>c</kbd> Open Course</li>
+              <li><kbd>g</kbd> then <kbd>s</kbd> Open Simulator</li>
+              <li><kbd>g</kbd> then <kbd>g</kbd> Open Glossary</li>
+              <li><kbd>?</kbd> All shortcuts</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
+  <!-- Scenario modal (kept from previous design) -->
   <div id="scenarioOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="scenarioTitle">
       <div class="modalHeader">
@@ -271,15 +394,9 @@
           <div class="sectionTitle">Scenario comparison</div>
           <div class="sectionHint">Compare two saved states side by side to spot policy differences.</div>
           <div class="scenarioCompare__controls">
-            <label class="scenarioCompare__control">
-              <span>Scenario A</span>
-              <select id="scenarioCompareLeft" class="textInput" aria-label="Scenario A selection"></select>
-            </label>
-            <label class="scenarioCompare__control">
-              <span>Scenario B</span>
-              <select id="scenarioCompareRight" class="textInput" aria-label="Scenario B selection"></select>
-            </label>
-            <button id="scenarioCompareSwap" class="btn btn--ghost btn--mini" type="button">Swap sides</button>
+            <label class="scenarioCompare__control"><span>Scenario A</span><select id="scenarioCompareLeft" class="textInput"></select></label>
+            <label class="scenarioCompare__control"><span>Scenario B</span><select id="scenarioCompareRight" class="textInput"></select></label>
+            <button id="scenarioCompareSwap" class="btn btn--ghost btn--mini">Swap sides</button>
           </div>
           <div class="scenarioCompare__grid">
             <div id="scenarioCompareLeftCard" class="scenarioCompare__card"></div>
@@ -288,14 +405,11 @@
           <div id="scenarioCompareDiff" class="scenarioCompare__diff"></div>
         </div>
         <div class="scenarioFilters">
-          <label class="toggle toggle--compact">
-            <input id="toggleScenarioFavorites" type="checkbox" />
-            <span>Favorites only</span>
-          </label>
+          <label class="toggle toggle--compact"><input id="toggleScenarioFavorites" type="checkbox" /><span>Favorites only</span></label>
           <span class="sectionHint" style="margin:0;">Star scenarios to bookmark them for quick reuse.</span>
         </div>
         <div id="scenarioListRoot" aria-live="polite"></div>
-        <div id="scenarioComments" class="scenarioComments">
+        <div class="scenarioComments">
           <div class="scenarioComments__header">
             <div>
               <div class="sectionTitle">Scenario comments</div>
@@ -325,10 +439,14 @@
     </div>
   </div>
 
+  <!-- Shortcuts modal -->
   <div id="shortcutsOverlay" class="overlay hidden" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
-      <div class="modalHeader"><div id="shortcutsTitle" class="modalTitle">Keyboard shortcuts</div><button id="shortcutsClose" class="iconBtn" type="button" aria-label="Close keyboard shortcuts">✕</button></div>
-      <div id="shortcutsList" class="modalBody"></div>
+      <div class="modalHeader">
+        <div id="shortcutsTitle" class="modalTitle">Keyboard shortcuts</div>
+        <button id="shortcutsClose" class="iconBtn" type="button" aria-label="Close keyboard shortcuts">✕</button>
+      </div>
+      <div class="modalBody" id="shortcutsList"></div>
     </div>
   </div>
 
@@ -336,7 +454,7 @@
   <div id="appStatus" class="appStatus hidden" role="status" aria-live="polite"></div>
 
   <footer class="footer">
-    <div class="footerLeft">macrow — Interactive AD–AS simulator for IBDP Economics</div>
+    <div class="footerLeft">macrow — IBDP Economics · Macroeconomics</div>
     <div class="footerRight">Inquiries: <a class="link" href="mailto:raoco@virajrao.com">raoco@virajrao.com</a></div>
   </footer>
 
