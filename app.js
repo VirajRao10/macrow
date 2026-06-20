@@ -1,7 +1,7 @@
 // macrow — IBDP Economics · Macroeconomics learning app.
 // Routes: home, course, lesson, simulator, glossary, about.
 
-import { GRAPH, defaults, clamp, lerp, computeFromParams, AD, ASshape, equilibrium, adLineSegment, asLineSegments } from './js/calculations.js';
+import { GRAPH, defaults, clamp, lerp, computeFromParams, AD, ASshape, equilibrium, adLineSegment, SRAS_VIEWS, asPolyline } from './js/calculations.js';
 import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-share.js';
 import { storageGet, storageSet } from './js/local-storage.js';
 import { COURSE, GLOSSARY, GLOSSARY_SORTED } from './js/course.js';
@@ -456,6 +456,7 @@ const simState = {
   historyIndex: -1,
   compare: { on: false, snapshot: null },
   showAxisNumbers: true,
+  view: SRAS_VIEWS.KEYNESIAN,
 };
 
 const PARAM_DEFS = [
@@ -568,7 +569,7 @@ function renderMainChart() {
   const x = (Y) => pad.l + ((Y - GRAPH.Ymin) / (GRAPH.Ymax - GRAPH.Ymin)) * (W - pad.l - pad.r);
   const y = (P) => pad.t + (1 - (P - GRAPH.Pmin) / (GRAPH.Pmax - GRAPH.Pmin)) * (H - pad.t - pad.b);
 
-  const base = computeFromParams(defaults.params);
+  const base = { ...computeFromParams(defaults.params), view: simState.view };
   const cur = computeFromParams(simState.params);
 
   // Box / background
@@ -614,19 +615,26 @@ function renderMainChart() {
     svg.appendChild(lbl);
   }
 
-  // SRAS (current)
-  const segs = asLineSegments(cur.asShiftP, cur.yFe);
-  if (segs) {
-    const d1 = `M ${x(segs.seg1[0][0])} ${y(segs.seg1[0][1])} L ${x(segs.seg1[1][0])} ${y(segs.seg1[1][1])}`;
-    const d2 = `M ${x(segs.seg2[0][0])} ${y(segs.seg2[0][1])} L ${x(segs.seg2[1][0])} ${y(segs.seg2[1][1])}`;
-    svg.appendChild(svgEl('path', { d: d1 + ' ' + d2, stroke: 'var(--chart-as)', 'stroke-width': 3, fill: 'none' }));
-    const lbl = svgEl('text', { x: x(segs.seg1[1][0]) + 6, y: y(segs.seg1[1][1]) + 16, 'font-family': 'var(--font-sans)', 'font-size': 12, 'font-weight': 700, fill: 'var(--chart-as)' });
+  // SRAS (current) — draw the full curve as a smooth polyline. In the
+  // Keynesian view this is the textbook three-region shape (flat at low Y,
+  // rising in the middle, vertical near Yf). In the Monetarist view it is
+  // a single vertical line at Yf.
+  const sras = asPolyline({ asShiftP: cur.asShiftP, yFe: cur.yFe, view: simState.view });
+  if (sras && sras.pts && sras.pts.length >= 2) {
+    const d = 'M ' + sras.pts.map(([Y, P]) => `${x(Y)} ${y(P)}`).join(' L ');
+    svg.appendChild(svgEl('path', { d, stroke: 'var(--chart-as)', 'stroke-width': 3, fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    // Place the SRAS label near the upper portion of the curve, but on the
+    // left side so it doesn't collide with the AD label.
+    const labelPoint = simState.view === SRAS_VIEWS.MONETARIST
+      ? [sras.yFe, sras.pFlat + (sras.pEnd - sras.pFlat) * 0.15]
+      : [sras.yKink + 4, sras.pFlat - 4];
+    const lbl = svgEl('text', { x: x(labelPoint[0]) + 6, y: y(labelPoint[1]) - 4, 'font-family': 'var(--font-sans)', 'font-size': 12, 'font-weight': 700, fill: 'var(--chart-as)' });
     lbl.textContent = 'SRAS';
     svg.appendChild(lbl);
   }
 
   // Equilibrium
-  const eq = equilibrium(cur);
+  const eq = equilibrium({ ...cur, view: simState.view });
   svg.appendChild(svgEl('circle', { cx: x(eq.y), cy: y(eq.p), r: 5, fill: 'var(--text)' }));
   const dP = svgEl('line', { x1: x(eq.y), y1: y(eq.p), x2: x(eq.y), y2: H - pad.b, stroke: 'var(--text)', 'stroke-width': 1, 'stroke-dasharray': '3 3', opacity: 0.5 });
   svg.appendChild(dP);
@@ -637,7 +645,11 @@ function renderMainChart() {
   $('#statOutputValue').textContent = `Y ${num(eq.y)}`;
   $('#statPriceValue').textContent = `P ${num(eq.p)}`;
   $('#statPotentialValue').textContent = `Yf ${num(cur.yFe)}`;
-  const dY = eq.y - base.y; const dP2 = eq.p - base.p; const dYf = cur.yFe - base.yFe;
+  // Baseline equilibrium must use the SAME view as the current state, otherwise
+  // deltas are apples-to-oranges (e.g. monetarist Y is always Yf, so a
+  // Keynesian baseline would always show a misleading gap).
+  const baseEq = equilibrium(base);
+  const dY = eq.y - baseEq.y; const dP2 = eq.p - baseEq.p; const dYf = cur.yFe - base.yFe;
   $('#statOutputDelta').textContent = `Δ ${dY > 0 ? '+' : ''}${num(dY)}`;
   $('#statPriceDelta').textContent = `Δ ${dP2 > 0 ? '+' : ''}${num(dP2)}`;
   $('#statPotentialDelta').textContent = `Δ ${dYf > 0 ? '+' : ''}${num(dYf)}`;
@@ -647,9 +659,19 @@ function renderMainChart() {
   const gapPct = (gap / cur.yFe) * 100;
   const sl = $('#gapLabel');
   if (sl) {
-    if (gap < -2) { sl.textContent = `Recessionary gap: ${Math.abs(gapPct).toFixed(1)}% below potential`; sl.dataset.state = 'recessionary'; }
-    else if (gap > 2) { sl.textContent = `Inflationary gap: ${gapPct.toFixed(1)}% above potential`; sl.dataset.state = 'inflationary'; }
-    else { sl.textContent = 'Near full-employment equilibrium'; sl.dataset.state = ''; }
+    if (simState.view === SRAS_VIEWS.MONETARIST) {
+      sl.textContent = 'Monetarist: output pinned at Yf, prices absorb shocks';
+      sl.dataset.state = 'monetarist';
+    } else if (gap < -2) {
+      sl.textContent = `Recessionary gap: ${Math.abs(gapPct).toFixed(1)}% below potential`;
+      sl.dataset.state = 'recessionary';
+    } else if (gap > 2) {
+      sl.textContent = `Inflationary gap: ${gapPct.toFixed(1)}% above potential`;
+      sl.dataset.state = 'inflationary';
+    } else {
+      sl.textContent = 'Near full-employment equilibrium';
+      sl.dataset.state = '';
+    }
   }
 
   // Chip row
@@ -766,6 +788,21 @@ function initSimulator() {
   $('#toggleAxisNumbers')?.addEventListener('change', (e) => { simState.showAxisNumbers = e.target.checked; renderMainChart(); });
   $('#btnExportPng')?.addEventListener('click', exportChartPng);
   $('#btnExportSvg')?.addEventListener('click', exportChartSvg);
+
+  // SRAS view toggle (Keynesian vs Monetarist)
+  const viewBtns = $$('.viewToggle__btn');
+  const updateViewLabel = () => {
+    const lbl = $('#viewLabel');
+    if (lbl) lbl.textContent = simState.view === SRAS_VIEWS.MONETARIST ? 'Monetarist view' : 'Keynesian view';
+    viewBtns.forEach(b => b.classList.toggle('is-active', b.dataset.view === simState.view));
+  };
+  viewBtns.forEach(b => b.addEventListener('click', () => {
+    simState.view = b.dataset.view === SRAS_VIEWS.MONETARIST ? SRAS_VIEWS.MONETARIST : SRAS_VIEWS.KEYNESIAN;
+    updateViewLabel();
+    pushPolicyHistory();
+    renderMainChart();
+  }));
+  updateViewLabel();
   // Share
   $('#btnOpenSharePanel')?.addEventListener('click', openSharePanel);
   $('#btnCloseSharePanel')?.addEventListener('click', closeSharePanel);
