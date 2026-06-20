@@ -1,221 +1,185 @@
 import { chromium } from 'playwright';
 
-const BASE = 'http://127.0.0.1:4173/';
+const BASE = 'http://127.0.0.1:4174/';
 const errors = [];
+const consoleMsgs = [];
 const requests404 = [];
 
 const browser = await chromium.launch({ args: ['--disable-cache', '--disk-cache-size=0'] });
-const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, bypassCSP: true });
+const ctx = await browser.newContext({
+  viewport: { width: 1280, height: 900 },
+  bypassCSP: true,
+});
 await ctx.clearCookies();
 await ctx.route('**/*', (route) => {
   const headers = { ...route.request().headers(), 'cache-control': 'no-cache' };
   route.continue({ headers });
 });
+
 const page = await ctx.newPage();
 page.on('console', msg => {
+  consoleMsgs.push(`[${msg.type()}] ${msg.text()}`);
   if (msg.type() === 'error') errors.push(`[console] ${msg.text()}`);
-  if (msg.type() === 'warning') errors.push(`[warn] ${msg.text()}`);
 });
 page.on('pageerror', err => errors.push(`[pageerror] ${err.message}`));
 page.on('response', resp => { if (resp.status() >= 400) requests404.push(`${resp.status()} ${resp.url()}`); });
 
-console.log('--- desktop light ---');
+const assert = (cond, msg) => {
+  if (!cond) {
+    errors.push(`[assert] ${msg}`);
+    console.log(`✗ ${msg}`);
+  } else {
+    console.log(`✓ ${msg}`);
+  }
+};
+
+console.log('--- Home (light) ---');
 await page.goto(BASE + '?cb=' + Date.now(), { waitUntil: 'networkidle' });
-
-// Light theme default
-const themeAttr = await page.evaluate(() => document.documentElement.dataset.theme);
-console.log('theme:', themeAttr);
-
-// Logo visible
-const logoBox = await page.locator('.brand__logo').boundingBox();
-console.log('logo box:', logoBox ? `x=${Math.round(logoBox.x)} y=${Math.round(logoBox.y)} w=${Math.round(logoBox.width)} h=${Math.round(logoBox.height)}` : 'NOT VISIBLE');
-
-// Sidebar items
+assert(await page.locator('.brand__name').textContent() === 'macrow', 'brand name is macrow');
+assert(await page.locator('.brand__logo').isVisible(), 'logo visible in header');
+const moduleCards = await page.locator('.moduleCard').count();
+assert(moduleCards === 7, `7 module cards rendered (got ${moduleCards})`);
 const navItems = await page.locator('.sidebar .navBtn').allTextContents();
-console.log('nav items:', navItems.map(s=>s.trim()));
+assert(navItems.length === 5, `5 sidebar items (got ${navItems.length})`);
+const navItemsTrim = navItems.map(s => (s || '').trim());
+assert(JSON.stringify(navItemsTrim) === JSON.stringify(['Home', 'Course', 'Simulator', 'Glossary', 'About']), `sidebar order: Home, Course, Simulator, Glossary, About (got ${JSON.stringify(navItemsTrim)})`);
 
-// Active item
-const activeItem = await page.locator('.navBtn[aria-current="page"]').textContent();
-console.log('active item:', activeItem?.trim());
+console.log('--- Course ---');
+await page.click('.navBtn[data-nav="course"]');
+await page.waitForTimeout(200);
+const courseItems = await page.locator('.moduleListItem').count();
+assert(courseItems === 7, `7 module list items on Course (got ${courseItems})`);
 
-// Chart rendered (SVG has children)
-const chartChildren = await page.locator('#chartSvg > *').count();
-console.log('chart svg children:', chartChildren);
+console.log('--- Module view (3.2 AD/AS) ---');
+await page.click('.moduleListItem:has-text("Aggregate demand")');
+await page.waitForTimeout(200);
+assert(await page.locator('#moduleTitle').isVisible(), 'module title shown');
+const lessonRows = await page.locator('.lessonListItem').count();
+assert(lessonRows === 4, `4 lesson rows in module 3.2 (got ${lessonRows})`);
 
-// Y/P/Yf values populated
-const yVal = await page.locator('#statOutputValue').textContent();
-const pVal = await page.locator('#statPriceValue').textContent();
-const yfVal = await page.locator('#statPotentialValue').textContent();
-console.log('Y:', yVal, 'P:', pVal, 'Yf:', yfVal);
-
-// Click "Recessionary gap"
-await page.click('#btnMakeRecession');
+console.log('--- Lesson view (3.2.1) ---');
+await page.click('.lessonListItem:has-text("aggregate demand curve")');
 await page.waitForTimeout(300);
-const yAfter = await page.locator('#statOutputValue').textContent();
-const stateAfter = await page.locator('#gapLabel').textContent();
-console.log('after recession -> Y:', yAfter, 'state:', stateAfter);
+const lessonTitle = (await page.locator('#lessonTitle').textContent()) || '';
+assert(lessonTitle.includes('aggregate demand curve'), `lesson title set (${lessonTitle})`);
+const bodyParas = await page.locator('.lessonBody p').count();
+assert(bodyParas > 0, 'lesson has body paragraphs');
+const diagramSvg = await page.locator('.lessonBody .diagramSvg').count();
+assert(diagramSvg > 0, 'lesson has diagram SVG');
+const keyTerms = await page.locator('.keyTerm').count();
+assert(keyTerms > 0, 'lesson has key terms');
 
-// Theme toggle
-await page.click('#themeToggle');
+await page.click('#lessonComplete');
 await page.waitForTimeout(200);
-const themeAttr2 = await page.evaluate(() => document.documentElement.dataset.theme);
-console.log('after toggle theme:', themeAttr2);
-const stored = await page.evaluate(() => localStorage.getItem('macrow_theme_mode_v1'));
-console.log('stored theme:', stored);
+assert(await page.locator('#lessonCompleted').isVisible(), 'lesson shows completed state');
 
-// Reload and confirm dark persists
-await page.reload({ waitUntil: 'networkidle' });
-const themeAfterReload = await page.evaluate(() => document.documentElement.dataset.theme);
-console.log('after reload theme:', themeAfterReload);
-
-// Toggle back to light
-await page.click('#themeToggle');
-await page.waitForTimeout(200);
-
-// Click sidebar "Policies"
-await page.click('.navBtn[data-tab="policies"]');
-await page.waitForTimeout(150);
-const activeAfter = await page.locator('.navBtn[aria-current="page"]').textContent();
-console.log('after click policies -> active:', activeAfter?.trim());
-
-// Click "Scenarios" — should open scenario overlay
-await page.click('#btnScenarios');
-await page.waitForTimeout(200);
-const scenarioVisible = await page.locator('#scenarioOverlay:not(.hidden)').count();
-console.log('scenario overlay visible:', scenarioVisible > 0);
-await page.click('#scenarioClose');
-await page.waitForTimeout(150);
-
-// Save a scenario
-await page.click('#btnScenarios');
-await page.waitForTimeout(150);
-await page.fill('#scenarioName', 'Verification scenario');
-await page.click('#btnSaveScenario');
-await page.waitForTimeout(300);
-const listItems = await page.locator('#scenarioListRoot *').count();
-console.log('scenario list populated:', listItems > 0);
-
-// Open the share panel and copy share link
-await page.click('#scenarioClose');
-await page.waitForTimeout(150);
-await page.click('#btnOpenSharePanel');
-await page.waitForTimeout(200);
-await page.click('#btnShareLinkPanel');
+console.log('--- Simulator ---');
+await page.click('.navBtn[data-nav="simulator"]');
 await page.waitForTimeout(400);
-const shareLinkText = await page.evaluate(() => {
-  const el = document.getElementById('shareLinkPreview');
-  return el ? el.textContent : '';
-});
-console.log('share link text length:', shareLinkText?.length || 0);
-console.log('share link preview snippet:', (shareLinkText || '').slice(0, 100));
+assert(await page.locator('#chartSvg > *').count() > 0, 'chart renders SVG children');
+assert(await page.locator('.presetBtn').count() >= 8, 'presets present');
+const yVal = await page.locator('#statOutputValue').textContent();
+assert(yVal && yVal.startsWith('Y '), `stat output value set (${yVal})`);
 
-// Navigate to Learn
-await page.click('.navBtn[data-tab="learn"]');
+await page.click('[data-preset="recession"]');
 await page.waitForTimeout(200);
-const learnHasContent = await page.locator('#panelLearn .learnCard, #panelLearn h2, #panelLearn .sectionTitle').first().count();
-console.log('learn panel has content:', learnHasContent > 0);
+const stateLabel = await page.locator('#gapLabel').textContent();
+assert(stateLabel?.toLowerCase().includes('recession') || stateLabel?.toLowerCase().includes('near'), `state label updated (${stateLabel})`);
 
-// Try clicking the long-run equilibrium diagram button to surface any errors
-const lrBtn = page.locator('button:has-text("Long-run"), button:has-text("Long-run equilibrium")').first();
-if (await lrBtn.count()) {
-  await lrBtn.click().catch(()=>{});
-  await page.waitForTimeout(200);
-}
-const srasErrors = errors.filter(e => e.includes('asLineSegments'));
-console.log('asLineSegments errors after LR view:', srasErrors.length);
+console.log('--- Glossary ---');
+await page.click('.navBtn[data-nav="glossary"]');
+await page.waitForTimeout(200);
+const glossaryItems = await page.locator('.glossaryItem').count();
+assert(glossaryItems >= 30, `glossary has many items (${glossaryItems})`);
+await page.fill('#glossarySearch', 'gdp');
+await page.waitForTimeout(200);
+const filtered = await page.locator('.glossaryItem').count();
+assert(filtered < glossaryItems, `search filters (${filtered} < ${glossaryItems})`);
 
-// Navigate to About
-await page.click('.navBtn[data-tab="about"]');
-await page.waitForTimeout(150);
-const aboutActive = await page.locator('.navBtn[aria-current="page"]').textContent();
-console.log('about active:', aboutActive?.trim());
+console.log('--- About ---');
+await page.click('.navBtn[data-nav="about"]');
+await page.waitForTimeout(200);
+assert(await page.locator('.aboutGrid').isVisible(), 'about grid visible');
 
-// Sidebar keyboard nav (focus sidebar item then ArrowDown)
-await page.focus('.sidebar .navBtn[data-tab="diagram"]');
-const focusBeforeArrow = await page.evaluate(() => document.activeElement?.textContent?.trim());
-console.log('focus before arrow:', focusBeforeArrow);
-await page.keyboard.press('ArrowDown');
-await page.waitForTimeout(50);
-const focusAfterArrow = await page.evaluate(() => document.activeElement?.textContent?.trim());
-console.log('focus after ArrowDown:', focusAfterArrow);
-
-console.log('--- mobile (375x812) ---');
+console.log('--- Mobile (375) ---');
 await page.setViewportSize({ width: 375, height: 812 });
-await page.reload({ waitUntil: 'networkidle' });
-const hamburgerVisible = await page.locator('#btnSidebarOpen').isVisible();
-console.log('hamburger visible:', hamburgerVisible);
-const sidebarOpenAtStart = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open at start:', sidebarOpenAtStart);
-
+await page.goto(BASE + '?cb=' + Date.now(), { waitUntil: 'networkidle' });
+assert(await page.locator('#btnSidebarOpen').isVisible(), 'hamburger visible on mobile');
+assert(!(await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'))), 'drawer closed initially');
 await page.click('#btnSidebarOpen');
 await page.waitForTimeout(200);
-const sidebarOpen = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open after click:', sidebarOpen);
-
-// Click an item -> drawer closes
-await page.click('.navBtn[data-tab="policies"]');
-await page.waitForTimeout(200);
-const sidebarAfterNav = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open after nav-click:', sidebarAfterNav);
-
-// Reopen + press Escape -> drawer closes
-await page.click('#btnSidebarOpen');
-await page.waitForTimeout(150);
-const sidebarBeforeEsc = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open before Esc:', sidebarBeforeEsc);
+assert(await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open')), 'drawer opens on hamburger click');
 await page.keyboard.press('Escape');
-await page.waitForTimeout(150);
-const sidebarAfterEsc = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open after Esc:', sidebarAfterEsc);
+await page.waitForTimeout(200);
+assert(!(await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'))), 'drawer closes on Escape');
 
-// Backdrop click closes — verify it programmatically (sidebar covers most of the area so direct click is blocked)
+console.log('--- Theme ---');
+await page.setViewportSize({ width: 1280, height: 900 });
+await page.goto(BASE + '?cb=' + Date.now(), { waitUntil: 'networkidle' });
+assert((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'default theme is light');
+await page.click('#themeToggle');
+await page.waitForTimeout(150);
+assert((await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'theme toggles to dark');
+const stored = await page.evaluate(() => localStorage.getItem('macrow_theme_mode_v1'));
+assert(stored === 'dark', `theme persisted to dark (${stored})`);
+
+// Screenshots — light mode, fresh state
+await page.evaluate(() => {
+  localStorage.clear();
+  document.documentElement.dataset.theme = 'light';
+});
+await page.goto(BASE + '?cb=' + Date.now() + '1', { waitUntil: 'networkidle' });
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'screenshot-home.png' });
+console.log('saved screenshot-home.png');
+
+await page.click('.navBtn[data-nav="course"]');
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'screenshot-course.png' });
+console.log('saved screenshot-course.png');
+
+await page.click('.moduleListItem:has-text("Measuring economic activity")');
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'screenshot-module.png' });
+console.log('saved screenshot-module.png');
+
+await page.click('.lessonListItem >> nth=0');
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'screenshot-lesson.png' });
+console.log('saved screenshot-lesson.png');
+
+await page.click('.navBtn[data-nav="simulator"]');
+await page.waitForTimeout(500);
+await page.screenshot({ path: 'screenshot-simulator.png' });
+console.log('saved screenshot-simulator.png');
+
+await page.click('.navBtn[data-nav="glossary"]');
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'screenshot-glossary.png' });
+console.log('saved screenshot-glossary.png');
+
+await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+await page.evaluate(() => localStorage.removeItem('macrow_last_route_v2'));
+await page.goto(BASE + '?cb=' + Date.now() + '2', { waitUntil: 'networkidle' });
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'screenshot-home-dark.png' });
+console.log('saved screenshot-home-dark.png');
+
+await page.setViewportSize({ width: 375, height: 812 });
+await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+await page.goto(BASE + '?cb=' + Date.now() + '3', { waitUntil: 'networkidle' });
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'screenshot-mobile-home.png' });
+console.log('saved screenshot-mobile-home.png');
+
 await page.click('#btnSidebarOpen');
-await page.waitForTimeout(150);
-const backdropBefore = await page.locator('.sidebarBackdrop').evaluate(el => el.classList.contains('sidebarBackdrop--open'));
-console.log('backdrop open before click:', backdropBefore);
-// Dispatch the click event directly on the backdrop element (covers the case where sidebar overlays it)
-await page.locator('.sidebarBackdrop').dispatchEvent('click');
-await page.waitForTimeout(150);
-const sidebarAfterBackdrop = await page.locator('.sidebar').evaluate(el => el.classList.contains('sidebar--open'));
-console.log('sidebar open after backdrop click:', sidebarAfterBackdrop);
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'screenshot-mobile-drawer.png' });
+console.log('saved screenshot-mobile-drawer.png');
 
 console.log('--- summary ---');
 console.log('errors:', errors.length, errors.length ? errors : '');
 console.log('4xx/5xx:', requests404.length, requests404.length ? requests404 : '');
 
-// Take screenshots
-await page.setViewportSize({ width: 1280, height: 900 });
-await page.evaluate(() => document.documentElement.dataset.theme = 'light');
-await page.click('.navBtn[data-tab="diagram"]');
-await page.waitForTimeout(200);
-await page.screenshot({ path: 'screenshot-desktop-light.png', fullPage: false });
-console.log('screenshot saved: screenshot-desktop-light.png');
-
-await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
-await page.waitForTimeout(150);
-await page.screenshot({ path: 'screenshot-desktop-dark.png', fullPage: false });
-console.log('screenshot saved: screenshot-desktop-dark.png');
-
-await page.evaluate(() => document.documentElement.dataset.theme = 'light');
-await page.click('.navBtn[data-tab="policies"]');
-await page.waitForTimeout(150);
-await page.screenshot({ path: 'screenshot-policies.png', fullPage: false });
-console.log('screenshot saved: screenshot-policies.png');
-
-await page.click('.navBtn[data-tab="learn"]');
-await page.waitForTimeout(200);
-await page.screenshot({ path: 'screenshot-learn.png', fullPage: false });
-console.log('screenshot saved: screenshot-learn.png');
-
-await page.setViewportSize({ width: 375, height: 812 });
-await page.evaluate(() => document.documentElement.dataset.theme = 'light');
-await page.waitForTimeout(150);
-await page.screenshot({ path: 'screenshot-mobile.png', fullPage: false });
-console.log('screenshot saved: screenshot-mobile.png');
-
-await page.click('#btnSidebarOpen');
-await page.waitForTimeout(250);
-await page.screenshot({ path: 'screenshot-mobile-drawer.png', fullPage: false });
-console.log('screenshot saved: screenshot-mobile-drawer.png');
-
 await browser.close();
+process.exit(errors.length > 0 || requests404.length > 0 ? 1 : 0);
