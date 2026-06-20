@@ -3,9 +3,9 @@
   "short_name": "macrow",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0b1220",
-  "theme_color": "#0b1220",
-  "description": "IB Keynesian AD–AS, simplified and interactive.",
+  "background_color": "#FAF8F4",
+  "theme_color": "#FAF8F4",
+  "description": "Interactive IB Keynesian AD–AS simulator.",
   "icons": [
     {
       "src": "./assets/macrow-logo.png",
