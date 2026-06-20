@@ -1,12 +1,16 @@
-import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment } from './js/calculations.js';
-import { loadProgress, saveProgress } from './js/storage.js';
-import { buildQuizQuestions, buildPracticeFromConcepts } from './js/assessments.js';
+import { GRAPH as C_GRAPH, defaults as C_DEFAULTS, clamp, lerp, computeFromParams, AD, invertAD_Y, ASshape, equilibrium, adLineSegment, asLineSegments } from './js/calculations.js';
 import { LEARN_TOPIC_PRACTICE, evaluatePracticeAnswer, computePracticeScore } from './js/learn-practice.js';
-import { summarizeTeacherAnalytics } from './js/teacher-analytics.js';
 import { normalizeScenarios, addCommentToScenario, formatCommentTimestamp } from './js/scenario-comments.js';
 import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-share.js';
-import { authenticateUser, registerUser, getActiveUser, setActiveUser, clearActiveUser } from './js/auth.js';
 import { storageGet, storageSet } from './js/local-storage.js';
+
+const PROGRESS_STORAGE_KEY='macrow_progress_v1';
+function loadProgress(){
+  const raw=storageGet(PROGRESS_STORAGE_KEY);
+  if(!raw) return {};
+  try{return JSON.parse(raw)||{};}catch(_e){return {};}
+}
+function saveProgress(p){storageSet(PROGRESS_STORAGE_KEY,JSON.stringify(p||{}));}
 
 if ("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));
 const GRAPH=C_GRAPH; const defaults=C_DEFAULTS;
@@ -35,20 +39,42 @@ const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">"
 
 const THEME_STORAGE_KEY="macrow_theme_mode_v1";
 const ThemeMode={DARK:"dark",LIGHT:"light"};
-let currentTheme=ThemeMode.DARK;
+let currentTheme=ThemeMode.LIGHT;
 function detectSystemPrefersDark(){return typeof window!="undefined"&&typeof window.matchMedia==="function"&&window.matchMedia("(prefers-color-scheme: dark)").matches;}
 function getPreferredTheme(){const stored=storageGet(THEME_STORAGE_KEY);if(stored===ThemeMode.LIGHT||stored===ThemeMode.DARK)return stored;return detectSystemPrefersDark()?ThemeMode.DARK:ThemeMode.LIGHT;}
-function applyTheme(theme,{persist=true}={}){const nextTheme=theme===ThemeMode.LIGHT?ThemeMode.LIGHT:ThemeMode.DARK;currentTheme=nextTheme;const body=document.body;if(body)body.dataset.theme=nextTheme;if(persist)storageSet(THEME_STORAGE_KEY,nextTheme);updateThemeToggleUI();}
+function applyTheme(theme,{persist=true}={}){const nextTheme=theme===ThemeMode.LIGHT?ThemeMode.LIGHT:ThemeMode.DARK;currentTheme=nextTheme;document.documentElement.dataset.theme=nextTheme;if(persist)storageSet(THEME_STORAGE_KEY,nextTheme);updateThemeToggleUI();}
 function updateThemeToggleUI(){const toggle=qs("#themeToggle");if(!toggle)return;const isDark=currentTheme===ThemeMode.DARK;toggle.setAttribute("aria-pressed",isDark?"true":"false");toggle.setAttribute("aria-label",isDark?"Switch to light mode":"Switch to dark mode");const icon=toggle.querySelector(".themeToggle__icon");const label=toggle.querySelector(".themeToggle__label");if(icon)icon.textContent=isDark?"🌙":"☀️";if(label)label.textContent=isDark?"Dark theme":"Light theme";}
 function initThemeToggle(){const toggle=qs("#themeToggle");if(!toggle)return;toggle.addEventListener("click",()=>{const next=currentTheme===ThemeMode.DARK?ThemeMode.LIGHT:ThemeMode.DARK;applyTheme(next);});updateThemeToggleUI();}
 applyTheme(getPreferredTheme(),{persist:false});
+
+function initSidebarToggle(){
+  const sidebar = qs('.sidebar');
+  const backdrop = qs('.sidebarBackdrop');
+  const openBtn = qs('#btnSidebarOpen');
+  const closeBtn = qs('#btnSidebarClose');
+  if(!sidebar) return;
+  const open = ()=>{ sidebar.classList.add('sidebar--open'); backdrop?.classList.add('sidebarBackdrop--open'); document.body.classList.add('sidebar-open'); const first = sidebar.querySelector('.navBtn'); if(first) setTimeout(()=>first.focus(), 50); };
+  const close = ()=>{ sidebar.classList.remove('sidebar--open'); backdrop?.classList.remove('sidebarBackdrop--open'); document.body.classList.remove('sidebar-open'); openBtn?.focus(); };
+  openBtn?.addEventListener('click', open);
+  closeBtn?.addEventListener('click', close);
+  backdrop?.addEventListener('click', close);
+  sidebar.addEventListener('keydown', e=>{
+    if(e.key !== 'Tab') return;
+    const focusables = Array.from(sidebar.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(el=>!el.classList.contains('hidden'));
+    if(!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+  });
+}
 
 const SCENARIO_STORAGE_KEY="macrow_scenarios_v1";
 const FLASHCARD_STORAGE_KEY="macrow_flashcards_srs_v1";
 const scenarioFilterState={favoritesOnly:false};
 const URL_STATE_PARAM_MAP={govSpending:'gov',taxRate:'tax',interestRate:'interest',productionCosts:'cost',productivity:'prod',supplySideReform:'reform'};
 const KEYBOARD_SHORTCUTS=[
-  {key:"p",desc:"Policies tab"},{key:"r",desc:"Parameters tab"},{key:"l",desc:"Learn tab"},{key:"q",desc:"Assess tab (when enabled)"},{key:"a",desc:"About tab"},
+  {key:"d",desc:"Diagram (home)"},{key:"p",desc:"Policies section"},{key:"r",desc:"Parameters section"},{key:"l",desc:"Learn section"},{key:"a",desc:"About section"},
   {key:"s",desc:"Open scenario manager"},{key:"?",desc:"Shortcuts modal"},{key:"x",desc:"Reset parameters"},{key:"Escape",desc:"Close overlays"}
 ];
 const LEARN_TIPS=[
@@ -382,10 +408,9 @@ const GLOSSARY=[
 
 const settings={
   showAxisNumbers:(storageGet("macrow_show_axis_numbers","1"))==="1",
-  accessibility:(storageGet("macrow_access","0"))==="1",
-  assessEnabled:(storageGet("macrow_assess_enabled","0"))==="1"
+  accessibility:(storageGet("macrow_access","0"))==="1"
 };
-let state={tab:"policies",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null},activeScenarioId:null};
+let state={tab:"diagram",params:deepCopy(defaults.params),adShiftY:0,asShiftP:0,yFe:GRAPH.yFeBase,history:[],historyIndex:-1,compare:{on:false,snapshot:null},activeScenarioId:null};
 let scenarios=[];
 let scenarioComparisonController = null;
 try {
@@ -402,7 +427,6 @@ progress.quizAttempts=progress.quizAttempts||[];
 progress.competencies=progress.competencies||{};
 let flashcardProgress=loadFlashcardProgress();
 let learnPanelRendered=false;
-let currentUser=getActiveUser();
 const topicQuizState={topicId:null,questionIndex:0,answers:[],feedback:null,completed:false,summary:null};
 const phillipsState={mode:'srpc',shift:0,inflation:4.5,naturalU:5.2};
 const moneyMarketState={mdShift:0,msShift:0,policyRate:4.0};
@@ -463,163 +487,58 @@ const CURVE_SHIFT_CONFIG={min:-2,max:2,step:1};
 const shiftCurve=(value,direction)=>clamp(value+(direction*CURVE_SHIFT_CONFIG.step),CURVE_SHIFT_CONFIG.min,CURVE_SHIFT_CONFIG.max);
 
 const navButtons=qsa('.navBtn');
-const assessNavButton=navButtons.find(b=>b.dataset.tab==="assess");
-const authOverlay=qs('#authOverlay');
-const authForm=qs('#authForm');
-const authTabs=qsa('[data-auth-mode]');
-const authRegisterFields=qsa('.authField--register');
-const authMessage=qs('#authMessage');
-const authSubmitButton=qs('#authSubmit');
-const authFooterHint=qs('#authFooterHint');
-const authSwitchMode=qs('#authSwitchMode');
-const authUsername=qs('#authUsername');
-const authPassword=qs('#authPassword');
-const authDisplayName=qs('#authDisplayName');
-const authRoleSelect=qs('#authRole');
-let authMode='login';
-
-function setAuthMode(mode){
-  if(!authOverlay) return;
-  authMode=mode==='register'?'register':'login';
-  authForm?.reset();
-  displayAuthMessage('');
-  if(authSubmitButton) authSubmitButton.textContent=authMode==='register'?'Create account':'Sign in';
-  if(authFooterHint) authFooterHint.textContent=authMode==='register'
-    ?'Teacher accounts unlock class analytics, while students can track progress.'
-    :'Sign in with your credentials to open the teacher dashboard.';
-  authRegisterFields?.forEach(field=>field.classList.toggle('hidden',authMode!=='register'));
-  authTabs?.forEach(tab=>tab.classList.toggle('authTab--active',tab.dataset.authMode===authMode));
-  if(authUsername) authUsername.focus();
-}
-
-function openAuthOverlay(mode='login'){
-  if(!authOverlay) return;
-  setAuthMode(mode);
-  authOverlay.classList.remove('hidden');
-  authOverlay.setAttribute('aria-hidden','false');
-}
-
-function closeAuthOverlay(){
-  if(!authOverlay) return;
-  authOverlay.classList.add('hidden');
-  authOverlay.setAttribute('aria-hidden','true');
-}
-
-function displayAuthMessage(text='',isError=true){
-  if(!authMessage) return;
-  authMessage.textContent=text;
-  authMessage.classList.toggle('authMessage--error',!!text&&isError);
-  authMessage.classList.toggle('authMessage--success',!!text&&!isError);
-}
-
-async function handleAuthSubmit(event){
-  event.preventDefault();
-  if(!authForm) return;
-  const username=authUsername?.value||'';
-  const password=authPassword?.value||'';
-  if(!username||!password){
-    displayAuthMessage('Username and password are required.');
-    return;
-  }
-  try{
-    if(authMode==='register'){
-      const role=authRoleSelect?.value||'student';
-      const displayName=authDisplayName?.value||username;
-      const user=await registerUser({username,password,displayName,role});
-      setActiveUser(user);
-      currentUser=user;
-      updateAuthStatusUI();
-      showStatus(`Welcome, ${user.displayName}`);
-    } else {
-      const user=await authenticateUser({username,password});
-      if(!user) throw new Error('Invalid username or password.');
-      setActiveUser(user);
-      currentUser=user;
-      updateAuthStatusUI();
-      showStatus(`Signed in as ${user.displayName}`);
-    }
-    renderTeacherPanel();
-    closeAuthOverlay();
-  }catch(err){
-    displayAuthMessage(err?.message||'Unable to sign in.');
-  }
-}
-
-function initAuthControls(){
-  const openBtn=qs('#btnAuthOpen');
-  const signOutBtn=qs('#btnAuthSignOut');
-  openBtn?.addEventListener('click',()=>openAuthOverlay('login'));
-  signOutBtn?.addEventListener('click',()=>{
-    clearActiveUser();
-    currentUser=null;
-    updateAuthStatusUI();
-    renderTeacherPanel();
-    showStatus('Signed out.');
-  });
-  qs('#authClose')?.addEventListener('click',closeAuthOverlay);
-  authTabs?.forEach(tab=>tab.addEventListener('click',()=>setAuthMode(tab.dataset.authMode)));
-  authSwitchMode?.addEventListener('click',()=>setAuthMode(authMode==='login'?'register':'login'));
-  authForm?.addEventListener('submit',handleAuthSubmit);
-  setAuthMode(authMode);
-}
-
-function updateAuthStatusUI(){
-  const status=qs('#authStatus');
-  const openBtn=qs('#btnAuthOpen');
-  const signOutBtn=qs('#btnAuthSignOut');
-  if(status){
-    if(currentUser){
-      status.textContent=`${currentUser.displayName||currentUser.username} (${currentUser.role})`;
-      status.classList.add('authStatus--signed');
-    } else {
-      status.textContent='Guest';
-      status.classList.remove('authStatus--signed');
-    }
-  }
-  if(openBtn) openBtn.textContent=currentUser?'Switch account':'Sign in';
-  if(signOutBtn) signOutBtn.classList.toggle('hidden',!currentUser);
-}
 
 function ensureLearnPanelRendered(){
   renderLearnPanel();
   learnPanelRendered=true;
 }
-function setTab(tab){
-  if(tab==="teacher" && (!currentUser||currentUser.role!=='teacher')){
-    showStatus('Sign in as a teacher to view this dashboard.',true,2600);
-    openAuthOverlay('login');
-    return;
-  }
-  if(tab==="assess" && !settings.assessEnabled){
-    tab="policies";
-  }
-  state.tab=tab;
-  if(tab==="learn") ensureLearnPanelRendered();
+const VALID_SECTIONS = ['diagram','policies','parameters','scenarios','learn','about'];
+
+function setTab(section){
+  if(!VALID_SECTIONS.includes(section)) section = 'diagram';
+  state.tab = section;
+  if(section === 'learn') ensureLearnPanelRendered();
   navButtons.forEach(b=>{
-    const isActive=b.dataset.tab===tab;
-    b.classList.toggle('navBtn--active',isActive);
-    b.setAttribute('aria-selected',isActive?'true':'false');
-    b.setAttribute('tabindex',isActive?'0':'-1');
+    const isActive = b.dataset.tab === section;
+    b.classList.toggle('navBtn--active', isActive);
+    if(isActive) b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+    b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    b.setAttribute('tabindex', isActive ? '0' : '-1');
   });
-  ["policies","parameters","learn","assess","about","teacher"].forEach(t=>{
-    const panel=qs(`#panel${t[0].toUpperCase()+t.slice(1)}`);
+  VALID_SECTIONS.forEach(t=>{
+    const panel = qs(`#panel${t[0].toUpperCase()+t.slice(1)}`);
     if(!panel) return;
-    const hidden=t!==tab;
-    panel.classList.toggle('hidden',hidden);
-    panel.setAttribute('aria-hidden',hidden?'true':'false');
+    const hidden = t !== section;
+    panel.classList.toggle('hidden', hidden);
+    panel.setAttribute('aria-hidden', hidden ? 'true' : 'false');
   });
-  const titleEl=qs('#panelTitle');
-  if(titleEl) titleEl.textContent=tab[0].toUpperCase()+tab.slice(1);
-  qs('#underGraphFormula')?.classList.toggle('hidden',tab!=="parameters");
+  const titleEl = qs('#panelTitle');
+  if(titleEl){
+    const labels = { diagram:'Diagram', policies:'Policies', parameters:'Parameters', scenarios:'Scenarios', learn:'Learn', about:'About' };
+    titleEl.textContent = labels[section] || section;
+  }
+  qs('#underGraphFormula')?.classList.toggle('hidden', section !== 'parameters');
+  // Close mobile drawer if open
+  qs('.sidebar')?.classList.remove('sidebar--open');
+  qs('.sidebarBackdrop')?.classList.remove('sidebarBackdrop--open');
+  document.body.classList.remove('sidebar-open');
+  // Persist last visited section
+  try { storageSet('macrow_last_section_v1', section); } catch(_e) {}
 }
 navButtons.forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
-
-function syncAssessAvailability(){
-  if(!assessNavButton) return;
-  assessNavButton.classList.toggle("hidden",!settings.assessEnabled);
-  if(!settings.assessEnabled && state.tab==="assess"){
-    setTab("policies");
-  }
+// Sidebar keyboard nav (arrow keys)
+const sidebarEl = qs('.sidebar');
+if(sidebarEl){
+  sidebarEl.addEventListener('keydown', e=>{
+    if(e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const items = Array.from(sidebarEl.querySelectorAll('.navBtn'));
+    const idx = items.indexOf(document.activeElement);
+    if(idx === -1) return;
+    e.preventDefault();
+    const next = e.key === 'ArrowDown' ? (idx + 1) % items.length : (idx - 1 + items.length) % items.length;
+    items[next].focus();
+  });
 }
 
 
@@ -1480,7 +1399,7 @@ function renderLongRunEquilibriumDiagram(){
   if(asShifted.seg1&&asShifted.seg2){
     strokePath(svg,pathFromSegment(toX,toY,asShifted.seg1),'rgba(59,130,246,0.95)',4.2);
     strokePath(svg,pathFromSegment(toX,toY,asShifted.seg2),'rgba(59,130,246,0.95)',4.2);
-    boxedLabel(svg,toX(asShifted.yKink)+26,toY(asShifted.pKink)-12,'SRAS','rgba(59,130,246,0.95)',{fill:'rgba(6,11,22,0.9)'});
+    boxedLabel(svg,toX(asShifted.yKink)+26,toY(asShifted.pFlat)-12,'SRAS','rgba(59,130,246,0.95)',{fill:'rgba(6,11,22,0.9)'});
   }
   line(svg,toX(yFeShifted),toY(GRAPH.Pmin),toX(yFeShifted),toY(GRAPH.Pmax),'rgba(34,197,94,0.95)',3.6);
   text(svg,toX(yFeShifted)+6,toY(GRAPH.Pmax)-8,'LRAS','start','rgba(34,197,94,0.95)',11,true);
@@ -1977,43 +1896,6 @@ function renderFlashcardModule(){
   qs('#btnFlashReset').onclick=()=>{resetFlashcards(); renderFlashcardModule(); showStatus('Flashcard progress reset');};
 }
 
-function renderAssessPanel(){
-  const root=qs('#panelAssess');
-  const questions=buildQuizQuestions(GLOSSARY);
-  const practice=buildPracticeFromConcepts(GLOSSARY);
-  const attempts=progress.quizAttempts||[];
-  const avg=attempts.length?(attempts.reduce((a,b)=>a+b.score,0)/attempts.length).toFixed(1):'—';
-  root.innerHTML=`
-    <div class="sectionTitle">Formative quiz + progress dashboard</div>
-    <div class="learnCard"><b>Attempts:</b> ${attempts.length} &nbsp; <b>Average score:</b> ${avg}%</div>
-    <div class="sectionHint">Uses existing Macrow glossary terms only. Instant feedback is shown after each response.</div>
-    <div id="quizRoot"></div>
-    <div class="sectionTitle">Competency-based path</div>
-    <div class="learnCard" id="competencyRoot"></div>
-    <div class="sectionTitle">Practice prompts</div>
-    ${practice.map(p=>`<div class="learnCard"><b>${p.competency}</b><div class="policy__text">${escapeHtml(p.prompt)}</div></div>`).join('')}
-  `;
-  const quizHost=qs('#quizRoot');
-  quizHost.innerHTML=questions.map((q,i)=>`<div class="learnCard"><div><b>Q${i+1}.</b> ${escapeHtml(q.prompt)}</div><div class="scenarioToolbar">${q.options.map(o=>`<button class="btn btn--ghost" data-q="${q.id}" data-a="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join('')}</div><div id="fb_${q.id}" class="policy__text"></div></div>`).join('');
-  quizHost.onclick=e=>{
-    const b=e.target.closest('[data-q]'); if(!b) return;
-    const q=questions.find(x=>x.id===b.dataset.q); if(!q) return;
-    const ok=b.dataset.a===q.answer;
-    qs(`#fb_${q.id}`).textContent=ok
-      ?`✅ Correct. ${q.explanation||`Competency: ${q.competency}`}`
-      :`❌ Not quite. Correct answer: ${q.answer}. ${q.explanation||''}`;
-    progress.competencies[q.competency]=(progress.competencies[q.competency]||0)+(ok?1:0);
-    saveProgress(progress);
-  };
-  qs('#competencyRoot').innerHTML=['AD-AS Foundations','Policy Analysis','Evaluation','Diagram Reasoning','Evaluation Writing'].map(k=>`<div class="policy__text"><b>${k}</b>: ${progress.competencies?.[k]||0} mastery points</div>`).join('');
-  qs('#competencyRoot').insertAdjacentHTML('beforeend','<button id="btnSubmitQuiz" class="btn btn--primary">Record quiz attempt (auto score from feedback)</button>');
-  qs('#btnSubmitQuiz').onclick=()=>{
-    const score=Math.min(100,Math.round((Object.values(progress.competencies||{}).reduce((a,b)=>a+b,0)%10)/10*100));
-    progress.quizAttempts=[...(progress.quizAttempts||[]),{ts:Date.now(),score}].slice(-30);
-    saveProgress(progress);
-    renderAssessPanel();
-  };
-}
 
 function renderAboutPanel(){
   qs('#panelAbout').innerHTML=`
@@ -2030,299 +1912,19 @@ function renderAboutPanel(){
     </div>
 
     <div class="learnCard">
-      <div class="policy__text"><b>Microw - Coming Soon</b> (Microeconomics learning platform)</div>
+      <div class="policy__text"><b>Microw — Coming Soon</b> (Microeconomics learning platform)</div>
     </div>
 
     <div class="learnCard aboutActions">
       <label class="toggle"><input id="toggleAccess" type="checkbox"/><span>High contrast + larger controls</span></label>
-      <label class="toggle"><input id="toggleAssess" type="checkbox"/><span>Enable Assess tab (dev testing only)</span></label>
       <button id="btnOpenShortcuts" class="btn btn--ghost">Open shortcuts help</button>
     </div>
   `;
   qs('#toggleAccess').checked=settings.accessibility;
   qs('#toggleAccess').onchange=e=>{settings.accessibility=e.target.checked; storageSet('macrow_access',settings.accessibility?'1':'0'); document.body.classList.toggle('accessibility-mode',settings.accessibility);};
-  qs('#toggleAssess').checked=settings.assessEnabled;
-  qs('#toggleAssess').onchange=e=>{
-    settings.assessEnabled=e.target.checked;
-    storageSet('macrow_assess_enabled',settings.assessEnabled?'1':'0');
-    syncAssessAvailability();
-  };
   qs('#btnOpenShortcuts').onclick=openShortcuts;
 }
 
-// Teacher Dashboard MVP - Basic teacher view for monitoring student progress
-const TEACHER_STORAGE_KEY = 'macrow_teacher_data_v1';
-function readTeacherStorage(){
-  try{
-    const raw=storageGet(TEACHER_STORAGE_KEY);
-    return raw?JSON.parse(raw):{};
-  }catch{
-    return {};
-  }
-}
-function loadTeacherData(userKey){
-  if(!userKey) return {};
-  const store=readTeacherStorage();
-  return store[userKey]||{};
-}
-function saveTeacherData(userKey,data){
-  if(!userKey) return;
-  const store=readTeacherStorage();
-  store[userKey]=data||{};
-  storageSet(TEACHER_STORAGE_KEY,JSON.stringify(store));
-}
-
-function renderTeacherPanel(){
-  const root=qs('#panelTeacher');
-  if(!root) return;
-  if(!currentUser||currentUser.role!=='teacher'){
-    root.innerHTML=`
-      <div class="sectionTitle">Teacher dashboard</div>
-      <div class="sectionHint">Sign in as a teacher to unlock analytics and assignments.</div>
-      <div class="learnCard">
-        <div class="policy__name">Teacher access required</div>
-        <div class="policy__text">Authenticate to review student progress, assign scenarios, and unlock classroom tools.</div>
-        <div style="margin-top:14px;"><button id="btnTeacherSignIn" class="btn btn--primary">Sign in</button></div>
-      </div>
-    `;
-    qs('#btnTeacherSignIn')?.addEventListener('click',()=>openAuthOverlay('login'));
-    return;
-  }
-  const teacherData=loadTeacherData(currentUser.normalized);
-  const students=teacherData.students||[];
-  const assignedScenarios=teacherData.assignedScenarios||[];
-  
-  // Mock student data if none exists
-  const displayStudents=students.length?students:[
-    {id:'s1',name:'Alex',lastActive:Date.now()-3600000,progress:75,assessScore:82},
-    {id:'s2',name:'Jordan',lastActive:Date.now()-7200000,progress:45,assessScore:68},
-    {id:'s3',name:'Taylor',lastActive:Date.now()-86400000,progress:90,assessScore:95},
-  ];
-  
-  const now=Date.now();
-  const fmtTime=ts=>{const diff=now-ts; if(diff<3600000)return'M'+Math.round(diff/60000); if(diff<86400000)return'H'+Math.round(diff/3600000); return'D'+Math.round(diff/86400000);};
-  const formatTimeAgo=ts=>{if(!Number.isFinite(ts))return'—';const label=fmtTime(ts);if(!label)return'—';const unit=label[0];const value=label.slice(1);if(!value)return'—';if(unit==='M')return`${value} min ago`;if(unit==='H')return`${value} hr ago`;if(unit==='D')return`${value} day${value==='1'?'':'s'} ago`;return`${value} ago`;};
-  const analytics=summarizeTeacherAnalytics({progress,scenarios,teacherData,now});
-  const avgScoreDisplay=analytics.avgScore!=null?`${analytics.avgScore}%`:'—';
-  const avgScoreHint=analytics.lastAttemptTs?`Last attempt ${fmtTime(analytics.lastAttemptTs)} ago`:'No quiz attempts recorded yet.';
-  const bestScoreNote=analytics.bestScore!=null?` · Best ${analytics.bestScore}%`:'';
-  const streakLabel=`${analytics.streak} day${analytics.streak===1?'':'s'}`;
-  const streakHint=analytics.streak?'Consistent quiz practice':'Record quizzes to build a streak';
-  const scenarioLabel=Number.isFinite(analytics.totalScenarios)?analytics.totalScenarios:0;
-  const scenarioHint=analytics.totalScenarios?`${analytics.scenarioCategories} categories saved`:'Save scenarios to track usage';
-  const assignmentLabel=analytics.assignmentsCount??0;
-  const assignmentHint=analytics.lastAssignmentTs?`Last assignment ${fmtTime(analytics.lastAssignmentTs)} ago`:'Assign a scenario to get started';
-  const practiceHistory=progress.learnPracticeAttempts||[];
-  const practiceAverage=practiceHistory.length
-    ? (practiceHistory.reduce((sum,attempt)=>sum+(Number(attempt.score)||0),0)/practiceHistory.length).toFixed(1)
-    : null;
-  const latestPractice=practiceHistory.length
-    ? practiceHistory[practiceHistory.length-1]
-    : null;
-  const competencyEntries=Object.entries(progress.competencies||{});
-  const competencyPoints=competencyEntries.reduce((sum,[_key,value])=>sum+(Number(value)||0),0);
-  const competencyCount=competencyEntries.length;
-  const topicInsights=Object.entries(progress.learnTopicQuizzes||{}).map(([topicId,entry])=>{
-    const attempts=(entry?.attempts)||[];
-    const stats=deriveTopicStats(attempts);
-    const topicMeta=LEARN_TOPIC_PRACTICE.find(t=>t.id===topicId);
-    return{
-      id:topicId,
-      title:topicMeta?.title||topicId,
-      attempts:attempts.length,
-      best:stats.best,
-      average:stats.average,
-      lastAttempt:stats.last
-    };
-  }).sort((a,b)=>((b.best||0)-(a.best||0)));
-  const topTopics=topicInsights.slice(0,3);
-  const timelineAttempts=(progress.quizAttempts||[]).slice(-4).reverse();
-  const timelineHtml=timelineAttempts.length
-    ? timelineAttempts.map(attempt=>`
-        <div class="progressTracker__timelineItem">
-          <div class="progressTracker__timelineScore">${Number.isFinite(Number(attempt.score))?`${Math.round(attempt.score)}%`:'—'}</div>
-          <div class="progressTracker__timelineHint">${formatTimeAgo(Number(attempt.ts))}</div>
-        </div>
-      `).join('')
-    : '<div class="policy__text">No quiz attempts yet. Encourage students to try the Assess tab.</div>';
-  const topicItemsHtml=topTopics.length
-    ? topTopics.map(topic=>`
-        <div class="progressTracker__topic">
-          <div class="progressTracker__topicTitle">${escapeHtml(topic.title)}</div>
-          <div class="progressTracker__topicValue">${topic.best!==null?`${topic.best}%`:'—'} best</div>
-          <div class="progressTracker__topicHint">${topic.attempts} attempt${topic.attempts===1?'':'s'} · ${topic.lastAttempt?`${topic.lastAttempt.score}% · ${formatTimeAgo(topic.lastAttempt.ts)}`:'No recent data'}</div>
-        </div>
-      `).join('')
-    : '<div class="progressTracker__topicEmpty">No topic quizzes recorded yet. Encourage students to explore the Learn tab.</div>';
-  const progressTrackerHtml=`
-    <div class="sectionTitle">Student progress tracking</div>
-    <div class="learnCard progressTracker">
-      <div class="progressTracker__grid">
-        <div class="progressTracker__item">
-          <div class="progressTracker__label">Average quiz score</div>
-          <div class="progressTracker__value">${analytics.avgScore!=null?`${analytics.avgScore}%`:'—'}</div>
-          <div class="progressTracker__hint">${analytics.attemptsCount} attempts · ${streakLabel} streak</div>
-        </div>
-        <div class="progressTracker__item">
-          <div class="progressTracker__label">Practice sessions</div>
-          <div class="progressTracker__value">${practiceHistory.length}</div>
-          <div class="progressTracker__hint">${practiceAverage!==null?`Avg ${practiceAverage}%`:'No practice recorded yet'}</div>
-        </div>
-        <div class="progressTracker__item">
-          <div class="progressTracker__label">Competency mastery</div>
-          <div class="progressTracker__value">${competencyCount?competencyPoints:'—'}</div>
-          <div class="progressTracker__hint">${competencyCount?`${competencyCount} competencies tracked`:'No competency data yet'}</div>
-        </div>
-        <div class="progressTracker__item">
-          <div class="progressTracker__label">Latest practice score</div>
-          <div class="progressTracker__value">${latestPractice?.score!=null?`${Math.round(latestPractice.score)}%`:'—'}</div>
-          <div class="progressTracker__hint">${latestPractice?formatTimeAgo(latestPractice.ts):'No recent practice'}</div>
-        </div>
-      </div>
-      <div class="progressTracker__timeline">
-        <div class="progressTracker__timelineTitle">Recent quiz attempts</div>
-        <div class="progressTracker__timelineList">${timelineHtml}</div>
-      </div>
-      <div class="progressTracker__topics">
-        <div class="progressTracker__topicsTitle">Topic performance</div>
-        <div class="progressTracker__topicList">${topicItemsHtml}</div>
-      </div>
-    </div>
-  `;
-  
-  root.innerHTML=`
-    <div class="sectionTitle">Teacher Dashboard</div>
-    <div class="sectionHint">Monitor student progress and assign scenarios (MVP - localStorage only)</div>
-    
-    <div class="learnCard">
-      <div class="policy__name">Class Overview</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
-        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${displayStudents.length}</div><div class="sectionHint">Students</div></div>
-        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${Math.round(displayStudents.reduce((a,s)=>a+s.progress,0)/displayStudents.length)||0}%</div><div class="sectionHint">Avg Progress</div></div>
-        <div style="text-align:center;"><div style="font-size:24px;font-weight:700;">${Math.round(displayStudents.reduce((a,s)=>a+(s.assessScore||0),0)/displayStudents.length)||0}%</div><div class="sectionHint">Avg Score</div></div>
-      </div>
-    </div>
-    
-    <div class="sectionTitle">Teacher analytics</div>
-    <div class="learnCard analyticsGrid">
-      <div class="analyticsMetric">
-        <div class="analyticsMetric__value">${scenarioLabel}</div>
-        <div class="analyticsMetric__label">Scenarios saved</div>
-        <div class="analyticsMetric__hint">${scenarioHint}</div>
-      </div>
-      <div class="analyticsMetric">
-        <div class="analyticsMetric__value">${avgScoreDisplay}</div>
-        <div class="analyticsMetric__label">Average quiz score</div>
-        <div class="analyticsMetric__hint">${avgScoreHint}${bestScoreNote}</div>
-      </div>
-      <div class="analyticsMetric">
-        <div class="analyticsMetric__value">${streakLabel}</div>
-        <div class="analyticsMetric__label">Quiz streak</div>
-        <div class="analyticsMetric__hint">${streakHint}</div>
-      </div>
-      <div class="analyticsMetric">
-        <div class="analyticsMetric__value">${assignmentLabel}</div>
-        <div class="analyticsMetric__label">Assignments assigned</div>
-        <div class="analyticsMetric__hint">${assignmentHint}</div>
-      </div>
-    </div>
-    
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-      <div class="sectionTitle" style="margin:0;">Student Progress</div>
-      <button id="btnExportTeacherProgressCsv" class="btn btn--ghost" type="button">Export progress (CSV)</button>
-    </div>
-    ${displayStudents.map(s=>`
-      <div class="learnCard">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div><b>${escapeHtml(s.name)}</b><div class="sectionHint">Active ${fmtTime(s.lastActive)} ago</div></div>
-          <div style="text-align:right;">
-            <div>Progress: ${s.progress||0}%</div>
-            <div>Assess: ${s.assessScore||'—'}%</div>
-          </div>
-        </div>
-        <div style="margin-top:8px;background:rgba(255,255,255,0.1);height:6px;border-radius:3px;"><div style="background:rgba(59,130,246,0.8);height:100%;border-radius:3px;width:${s.progress||0}%"></div></div>
-      </div>
-    `).join('')}
-    
-    <div class="sectionTitle">Lesson plan library</div>
-    <div class="lessonPlanLibrary">
-      ${LESSON_PLANS.map(plan=>`
-        <div class="lessonPlanCard">
-          <div class="lessonPlanCard__header">
-            <div>
-              <div class="lessonPlanCard__title">${escapeHtml(plan.title)}</div>
-              <div class="lessonPlanCard__focus">${escapeHtml(plan.focus)}</div>
-            </div>
-            <div class="lessonPlanCard__duration">${escapeHtml(plan.duration)}</div>
-          </div>
-          <div class="lessonPlanCard__objective">${escapeHtml(plan.objective)}</div>
-          <ul class="lessonPlanCard__steps">
-            ${plan.steps.map(step=>`<li>${escapeHtml(step)}</li>`).join('')}
-          </ul>
-          ${plan.resources && plan.resources.length ? `<div class="lessonPlanCard__resources">${plan.resources.map(resource=>`<div>${escapeHtml(resource)}</div>`).join('')}</div>` : ''}
-          <div class="lessonPlanCard__actions">
-            <button class="btn btn--ghost btn--full" data-lesson-plan="${plan.id}">Load scenario & share</button>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-    
-    ${progressTrackerHtml}
-    
-    <div class="sectionTitle">Assign Scenarios</div>
-    <div class="learnCard">
-      <div class="policy__name">Create Assignment</div>
-      <div class="scenarioToolbar" style="margin-top:8px;flex-wrap:wrap;">
-        <select id="teacherScenarioSelect" class="textInput" aria-label="Select scenario">
-          <option value="">— Select a scenario -</option>
-          <option value="recession">Recessionary Gap</option>
-          <option value="inflation">Demand-Pull Inflation</option>
-          <option value="costpush">Cost-Push Inflation</option>
-          <option value="growth">Long-run Growth</option>
-        </select>
-        <button id="btnAssignScenario" class="btn btn--primary">Assign to Class</button>
-      </div>
-      <div id="teacherAssignedList" class="sectionHint" style="margin-top:12px;">
-        ${assignedScenarios.length?assignedScenarios.map(a=>`<div>📌 ${escapeHtml(a.scenario)} - Assigned ${fmtTime(a.assignedAt)} ago</div>`).join(''):'No assignments yet.'}
-      </div>
-    </div>
-    
-    <div class="learnCard">
-      <div class="policy__name">Teacher Tips</div>
-      <div class="policy__text">
-        • Use the <b>Scenarios</b> tab to create custom problems<br>
-        • Students can share their scenario URL with you<br>
-        • Track assess mode scores for formative data
-      </div>
-    </div>
-  `;
-
-  root.querySelectorAll('[data-lesson-plan]').forEach(btn=>{
-    btn.onclick=()=>handleLessonPlanLoad(btn.dataset.lessonPlan);
-  });
-
-  qs('#btnAssignScenario').onclick=()=>{
-    const select=qs('#teacherScenarioSelect');
-    const scenario=select?.value;
-    if(!scenario) return;
-    const assignment={scenario:select.options[select.selectedIndex].text,assignedAt:Date.now()};
-    const updatedData={
-      ...teacherData,
-      assignedScenarios:[assignment,...(teacherData.assignedScenarios||[])]
-    };
-    saveTeacherData(currentUser.normalized,updatedData);
-    renderTeacherPanel();
-  };
-
-  qs('#btnExportTeacherProgressCsv')?.addEventListener('click',()=>{
-    exportTeacherProgressCsv({
-      students:displayStudents,
-      progress,
-      analytics,
-      now:Date.now()
-    });
-  });
-}
 
 function handleLessonPlanLoad(planId){
   const plan=LESSON_PLANS.find(p=>p.id===planId);
@@ -3150,21 +2752,23 @@ function initChartPinchZoom(){
 }
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(authOverlay&&!authOverlay.classList.contains('hidden')){
-      closeAuthOverlay();
+    const sidebarOpen = qs('.sidebar')?.classList.contains('sidebar--open');
+    if(sidebarOpen){
+      qs('.sidebar')?.classList.remove('sidebar--open');
+      qs('.sidebarBackdrop')?.classList.remove('sidebarBackdrop--open');
+      document.body.classList.remove('sidebar-open');
+      qs('#btnSidebarOpen')?.focus();
       return;
     }
-    if(!qs('#welcomeOverlay').classList.contains('hidden'))qs('#welcomeClose').click();
     if(!qs('#scenarioOverlay').classList.contains('hidden'))qs('#scenarioClose').click();
     if(!qs('#shortcutsOverlay').classList.contains('hidden'))qs('#shortcutsClose').click();
   }
   if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault(); openShortcuts();}
+  if(e.key==='d')setTab('diagram');
   if(e.key==='p')setTab('policies');
   if(e.key==='r')setTab('parameters');
   if(e.key==='l')setTab('learn');
-  if(e.key==='q'&&settings.assessEnabled)setTab('assess');
   if(e.key==='a')setTab('about');
-  if(e.key==='t')setTab('teacher');
   if(e.key==='s')qs('#btnScenarios').click();
   if(e.key==='x')qs('#btnReset').click();
 });
@@ -3315,54 +2919,6 @@ function drawYfPoint(svg,x,y,as,c,muted=false,dash){const px=x(as.yFe),axisY=y(G
 function labelOnAD(svg,x,y,sh,c){const seg=adLineSegment(sh).seg; if(!seg)return null; const Y=lerp(seg[0][0],seg[1][0],.68),P=lerp(seg[0][1],seg[1][1],.68); const base=clampLabelPos({x:x(Y)+24,y:y(P)-24},{left:84,right:832,top:22,bottom:482},22); return boxedLabel(svg,base.x,base.y,'AD',c||'rgba(239,68,68,.95)');}
 function labelOnAS(svg,x,y,as,c,adLabel,yfLabel){let pos=clampLabelPos({x:x(as.yKink)+58,y:y(as.pFlat)-20},{left:84,right:832,top:22,bottom:482},22); if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},adLabel)){pos=clampLabelPos({x:pos.x+18,y:pos.y-34},{left:84,right:832,top:22,bottom:482},22);} if(labelsOverlap({x:pos.x,y:pos.y,w:60,h:28},yfLabel)){pos=clampLabelPos({x:pos.x-18,y:pos.y+32},{left:84,right:832,top:22,bottom:482},22);} return boxedLabel(svg,pos.x,pos.y,'AS',c||'rgba(59,130,246,.95)');}
 
-function showWelcomeIfNeeded(){
-  const k='macrow_welcome_dismissed_v7';
-  if(storageGet(k)==='1') return;
-  const ov=qs('#welcomeOverlay');
-  const intro=ov?.querySelector('.welcomeIntro');
-  const grid=ov?.querySelector('.welcomeGrid');
-  const okBtn=qs('#welcomeOk');
-  const closeBtn=qs('#welcomeClose');
-  if(!ov||!intro||!grid||!okBtn||!closeBtn) return;
-
-  const steps=[
-    {title:'Welcome to macrow',body:'Quick guided tour: we will show where to run scenarios, apply policy shifts, and use sliders.',target:null},
-    {title:'Step 1: Graph area',body:'This is your AD-AS canvas. Watch equilibrium output (Y) and price level (P) update live as you change policy.',target:'.chartCard'},
-    {title:'Step 2: Policy cards',body:'Use quick policy cards to simulate recession, demand-pull, and cost-push scenarios in one tap.',target:'#panelPolicies'},
-    {title:'Step 3: Parameters',body:'Open Parameters tab to fine-tune gov spending, tax, rates, costs, productivity, and reform assumptions.',target:'[data-tab="parameters"]'},
-    {title:'Step 4: Scenario sharing',body:'Use Share this scenario to copy a state link or QR code so others load the exact same setup.',target:'#btnOpenSharePanel'}
-  ];
-  let i=0;
-
-  const clearSpotlight=()=>qsa('.tour-spotlight').forEach(el=>el.classList.remove('tour-spotlight'));
-  const render=()=>{
-    const step=steps[i];
-    intro.innerHTML=`<b>${escapeHtml(step.title)}</b><div style="margin-top:6px;">${escapeHtml(step.body)}</div>`;
-    grid.innerHTML=`<article class="welcomeCard"><h3>Tour progress</h3><p>Step ${i+1} of ${steps.length}</p></article>`;
-    clearSpotlight();
-    if(step.target){
-      const target=qs(step.target);
-      if(target){target.classList.add('tour-spotlight'); target.scrollIntoView({behavior:'smooth',block:'center'});} 
-    }
-    okBtn.textContent=i===steps.length-1?'Finish tour':'Next';
-  };
-
-  const close=(save=false)=>{
-    if(save||qs('#welcomeDontShow')?.checked) storageSet(k,'1');
-    clearSpotlight();
-    ov.classList.add('hidden');
-    ov.setAttribute('aria-hidden','true');
-    document.removeEventListener('keydown',escHandler);
-  };
-  const escHandler=e=>{if(e.key==='Escape')close(false);};
-
-  ov.classList.remove('hidden');
-  ov.setAttribute('aria-hidden','false');
-  document.addEventListener('keydown',escHandler);
-  closeBtn.onclick=()=>close(false);
-  okBtn.onclick=()=>{if(i<steps.length-1){i+=1; render();}else close(true);};
-  render();
-}
 
 function initResilience(){
   window.addEventListener('error',event=>{
@@ -3393,20 +2949,17 @@ function init(){
   initResilience();
   initPerformanceMonitoring();
   initThemeToggle();
-  initAuthControls();
-  updateAuthStatusUI();
   document.body.classList.toggle('accessibility-mode',settings.accessibility);
   renderPoliciesPanel();
   renderParametersPanel();
-  renderAssessPanel();
   renderAboutPanel();
-  renderTeacherPanel();
   initScenarioManager();
   initShareTools();
   initChartPinchZoom();
-  syncAssessAvailability();
-  setTab('policies');
-  showWelcomeIfNeeded();
+  initSidebarToggle();
+  // Restore last visited section, or default to diagram.
+  const lastSection = (()=>{ try { return storageGet('macrow_last_section_v1'); } catch(_e){ return null; } })();
+  setTab(lastSection && VALID_SECTIONS.includes(lastSection) ? lastSection : 'diagram');
   applyScenarioFromUrl();
   onDocumentReady(()=>onParamsChanged(true));
 }
