@@ -4,7 +4,7 @@
 import { GRAPH, defaults, clamp, lerp, computeFromParams, AD, ASshape, equilibrium, adLineSegment, asLineSegments } from './js/calculations.js';
 import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-share.js';
 import { storageGet, storageSet } from './js/local-storage.js';
-import { COURSE, GLOSSARY } from './js/course.js';
+import { COURSE, GLOSSARY, GLOSSARY_SORTED } from './js/course.js';
 import { getDiagram, DEFAULT_CAPTION } from './js/diagrams.js';
 
 // ---------- Tiny DOM helpers ----------
@@ -415,7 +415,7 @@ function renderGlossary() {
     if (searchEl && searchEl.value !== search) searchEl.value = search;
   }
   list.innerHTML = '';
-  const sorted = [...GLOSSARY].sort((a, b) => a.term.localeCompare(b.term));
+  const sorted = GLOSSARY_SORTED;
   const filtered = search
     ? sorted.filter(e => e.term.toLowerCase().includes(search) || e.definition.toLowerCase().includes(search))
     : sorted;
