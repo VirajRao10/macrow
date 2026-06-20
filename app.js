@@ -6,6 +6,8 @@ import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-sha
 import { storageGet, storageSet } from './js/local-storage.js';
 import { COURSE, GLOSSARY, GLOSSARY_SORTED } from './js/course.js';
 import { getDiagram, DEFAULT_CAPTION } from './js/diagrams.js';
+import { glossaryByTopic, topicTitle, topicForTerm } from './js/topics.js';
+import { getQuiz, QUIZZES } from './js/quizzes.js';
 
 // ---------- Tiny DOM helpers ----------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -143,7 +145,7 @@ function initSidebarToggle() {
 }
 
 // ---------- Router ----------
-const ROUTES = ['home', 'course', 'simulator', 'glossary', 'about'];
+const ROUTES = ['home', 'course', 'simulator', 'glossary', 'about', 'recall'];
 let currentRoute = { name: 'home', params: {} };
 
 function navigate(name, params = {}) {
@@ -166,7 +168,7 @@ function render() {
   $$('.view').forEach(v => v.hidden = true);
   $$('.navBtn').forEach(b => b.removeAttribute('aria-current'));
 
-  const navMap = { home: 'home', course: 'course', module: 'course', lesson: 'course', simulator: 'simulator', glossary: 'glossary', about: 'about' };
+  const navMap = { home: 'home', course: 'course', module: 'course', lesson: 'course', simulator: 'simulator', glossary: 'glossary', about: 'about', recall: 'recall' };
   const navName = navMap[currentRoute.name];
   $(`.navBtn[data-nav="${navName}"]`)?.setAttribute('aria-current', 'page');
 
@@ -177,6 +179,7 @@ function render() {
   else if (currentRoute.name === 'simulator') renderSimulator();
   else if (currentRoute.name === 'glossary') renderGlossary();
   else if (currentRoute.name === 'about') renderAbout();
+  else if (currentRoute.name === 'recall') renderRecall();
 }
 
 // ---------- HOME ----------
@@ -305,6 +308,16 @@ function renderModuleView(moduleId) {
     ]);
     list.appendChild(item);
   });
+
+  // Quiz CTA at the bottom
+  const quiz = getQuiz(moduleId);
+  if (quiz) {
+    $('#moduleQuizCta').hidden = false;
+    $('#moduleQuizCtaTitle').textContent = `Quiz · ${quiz.questions.length} questions`;
+    $('#moduleQuizCtaSub').textContent = quiz.blurb;
+  } else {
+    $('#moduleQuizCta').hidden = true;
+  }
 }
 
 // ---------- LESSON ----------
@@ -351,6 +364,39 @@ function renderLessonView(moduleId, lessonId) {
       el('span', { class: 'formulaCallout__label' }, 'Formula'),
       lesson.formula,
     ]));
+  }
+  // Key takeaways
+  if (lesson.keyTakeaways && lesson.keyTakeaways.length) {
+    const box = el('div', { class: 'takeawaysCallout' }, [
+      el('div', { class: 'takeawaysCallout__label' }, 'Key takeaways'),
+      el('ul', { class: 'takeawaysCallout__list' },
+        lesson.keyTakeaways.map(t => el('li', {}, t))
+      ),
+    ]);
+    body.appendChild(box);
+  }
+  // Worked example
+  if (lesson.workedExample) {
+    const we = lesson.workedExample;
+    body.appendChild(el('div', { class: 'exampleCallout' }, [
+      el('div', { class: 'exampleCallout__label' }, we.title || 'Worked example'),
+      we.scenario ? el('p', { class: 'exampleCallout__scenario' }, we.scenario) : null,
+      we.steps ? el('ol', { class: 'exampleCallout__steps' }, we.steps.map(s => el('li', {}, s))) : null,
+      we.answer ? el('div', { class: 'exampleCallout__answer' }, [
+        el('span', { class: 'exampleCallout__answerLabel' }, 'Answer'),
+        we.answer,
+      ]) : null,
+    ]));
+  }
+  // Common mistakes
+  if (lesson.commonMistakes && lesson.commonMistakes.length) {
+    const box = el('div', { class: 'mistakesCallout' }, [
+      el('div', { class: 'mistakesCallout__label' }, 'Common mistakes to avoid'),
+      el('ul', { class: 'mistakesCallout__list' },
+        lesson.commonMistakes.map(m => el('li', {}, m))
+      ),
+    ]);
+    body.appendChild(box);
   }
   // Diagram
   if (lesson.diagram) {
@@ -648,7 +694,7 @@ function renderMainChart() {
   // Baseline equilibrium must use the SAME view as the current state, otherwise
   // deltas are apples-to-oranges (e.g. monetarist Y is always Yf, so a
   // Keynesian baseline would always show a misleading gap).
-  const baseEq = equilibrium(base);
+  const baseEq = equilibrium({ ...base, view: simState.view });
   const dY = eq.y - baseEq.y; const dP2 = eq.p - baseEq.p; const dYf = cur.yFe - base.yFe;
   $('#statOutputDelta').textContent = `Δ ${dY > 0 ? '+' : ''}${num(dY)}`;
   $('#statPriceDelta').textContent = `Δ ${dP2 > 0 ? '+' : ''}${num(dP2)}`;
@@ -657,6 +703,8 @@ function renderMainChart() {
   // State label
   const gap = eq.y - cur.yFe;
   const gapPct = (gap / cur.yFe) * 100;
+  // Price level deviation: how far above or below baseline (P=80 at defaults)
+  const dPStat = eq.p - baseEq.p;
   const sl = $('#gapLabel');
   if (sl) {
     if (simState.view === SRAS_VIEWS.MONETARIST) {
@@ -668,6 +716,13 @@ function renderMainChart() {
     } else if (gap > 2) {
       sl.textContent = `Inflationary gap: ${gapPct.toFixed(1)}% above potential`;
       sl.dataset.state = 'inflationary';
+    } else if (dPStat > 3) {
+      // Y is at Yf (no output gap) but prices are pushed up — latent inflationary pressure
+      sl.textContent = `Above potential: prices ${dPStat > 0 ? '+' : ''}${dPStat.toFixed(1)} above baseline, Y at Yf`;
+      sl.dataset.state = 'inflationary-latent';
+    } else if (dPStat < -3) {
+      sl.textContent = `Below potential: prices ${dPStat.toFixed(1)} below baseline, Y at Yf`;
+      sl.dataset.state = 'deflationary-latent';
     } else {
       sl.textContent = 'Near full-employment equilibrium';
       sl.dataset.state = '';
@@ -912,6 +967,360 @@ function renderSimulator() {
   }
 }
 
+// ---------- MODULE QUIZ ----------
+// Quiz state lives in a module-level object so a learner can navigate away
+// and come back without losing progress.
+const quizState = {
+  moduleId: null,
+  quiz: null,
+  // Per-question state: { [qid]: { selected: 'a', submitted: true, correct: true } }
+  answers: {},
+  startedAt: null,
+};
+
+function resetQuizState(moduleId) {
+  const quiz = getQuiz(moduleId);
+  if (!quiz) return;
+  quizState.moduleId = moduleId;
+  quizState.quiz = quiz;
+  quizState.answers = {};
+  quizState.startedAt = Date.now();
+}
+
+function renderQuizModal() {
+  const overlay = $('#moduleQuizOverlay');
+  if (!overlay) return;
+  const quiz = quizState.quiz;
+  if (!quiz) { overlay.classList.add('hidden'); return; }
+
+  // Update header
+  $('#moduleQuizEyebrow').textContent = `Module ${quiz.moduleId} quiz`;
+  $('#moduleQuizTitle').textContent = quiz.title;
+
+  const body = $('#moduleQuizBody');
+  body.innerHTML = '';
+
+  // Progress
+  const answered = Object.keys(quizState.answers).filter(k => quizState.answers[k]?.submitted).length;
+  const total = quiz.questions.length;
+  const intro = el('div', { class: 'quizIntro' }, [
+    el('p', {}, `Answer all ${total} questions. Short answers are self-marked — check yours against the model answer before continuing.`),
+    el('div', { class: 'quizProgress' }, [
+      el('div', { class: 'quizProgress__label' }, `Progress: ${answered} / ${total}`),
+      el('div', { class: 'quizProgress__bar' }, [
+        el('div', { class: 'quizProgress__fill', style: { width: `${(answered / total) * 100}%` } }),
+      ]),
+    ]),
+  ]);
+  body.appendChild(intro);
+
+  quiz.questions.forEach((q, qi) => {
+    const ans = quizState.answers[q.id] || {};
+    const card = el('div', { class: 'quizCard' + (ans.submitted ? (ans.correct ? ' quizCard--correct' : ' quizCard--wrong') : '') }, [
+      el('div', { class: 'quizCard__q' }, [
+        el('span', { class: 'quizCard__num' }, `${qi + 1}.`),
+        el('span', {}, q.prompt),
+      ]),
+    ]);
+    // Render input by type
+    if (q.type === 'mc' || q.type === 'tf') {
+      const list = el('div', { class: 'quizOptions' });
+      q.options.forEach(opt => {
+        const selected = ans.selected === opt.id;
+        const btn = el('button', {
+          class: 'quizOption' + (selected ? ' is-selected' : '') + (ans.submitted ? (opt.id === q.correct ? ' quizOption--correct' : (opt.id === ans.selected ? ' quizOption--wrong' : '')) : ''),
+          type: 'button',
+          disabled: ans.submitted ? true : false,
+          onclick: () => {
+            quizState.answers[q.id] = { ...(quizState.answers[q.id] || {}), selected: opt.id };
+            renderQuizModal();
+          },
+        }, [
+          el('span', { class: 'quizOption__mark' }, ans.submitted ? (opt.id === q.correct ? '✓' : (opt.id === ans.selected ? '✕' : '')) : (selected ? '●' : '')),
+          el('span', {}, opt.text),
+        ]);
+        list.appendChild(btn);
+      });
+      card.appendChild(list);
+    } else if (q.type === 'short') {
+      const ta = el('textarea', {
+        class: 'quizShortInput',
+        rows: 2,
+        placeholder: 'Type your answer here…',
+        oninput: (e) => { quizState.answers[q.id] = { ...(quizState.answers[q.id] || {}), text: e.target.value }; },
+      });
+      if (ans.text) ta.value = ans.text;
+      card.appendChild(ta);
+    }
+    // Submit / submitted status
+    const actions = el('div', { class: 'quizCard__actions' });
+    if (!ans.submitted) {
+      const btn = el('button', { class: 'btn btn--primary btn--mini', type: 'button', onclick: () => {
+        if (q.type === 'short' && !(quizState.answers[q.id]?.text || '').trim()) return;
+        if (q.type !== 'short' && !quizState.answers[q.id]?.selected) return;
+        const correct = checkQuizAnswer(q, quizState.answers[q.id]);
+        quizState.answers[q.id] = { ...(quizState.answers[q.id] || {}), submitted: true, correct };
+        renderQuizModal();
+      } }, 'Check answer');
+      actions.appendChild(btn);
+    } else {
+      if (q.type !== 'short') {
+        const verdict = ans.correct ? 'Correct' : 'Not quite — see below';
+        actions.appendChild(el('span', { class: 'quizCard__verdict' + (ans.correct ? ' quizCard__verdict--ok' : ' quizCard__verdict--bad') }, verdict));
+      } else {
+        // For short, show the model answer and a "Got it / Try again" pair
+        const ok = el('button', { class: 'btn btn--ghost btn--mini', type: 'button', onclick: () => {
+          quizState.answers[q.id] = { ...(quizState.answers[q.id] || {}), submitted: true, correct: true };
+          renderQuizModal();
+        } }, 'I got it');
+        const miss = el('button', { class: 'btn btn--ghost btn--mini', type: 'button', style: { marginLeft: '6px' }, onclick: () => {
+          quizState.answers[q.id] = { ...(quizState.answers[q.id] || {}), submitted: true, correct: false };
+          renderQuizModal();
+        } }, 'Didn\u2019t get it');
+        actions.appendChild(ok);
+        actions.appendChild(miss);
+      }
+    }
+    card.appendChild(actions);
+    // Explain / model answer (only after submit)
+    if (ans.submitted) {
+      const ex = el('div', { class: 'quizCard__explain' }, [
+        el('div', { class: 'quizCard__explainLabel' }, q.type === 'short' ? 'Model answer' : 'Explanation'),
+        el('p', {}, q.explain),
+        q.type === 'short' ? el('p', { class: 'quizCard__model' }, `Acceptable answers: ${q.accepted.map(a => `\u201C${a}\u201D`).join(', ')}.`) : null,
+      ]);
+      card.appendChild(ex);
+    }
+    body.appendChild(card);
+  });
+
+  // Score summary + retry
+  const autoScored = quiz.questions.filter(q => q.type !== 'short');
+  const autoCorrect = autoScored.filter(q => quizState.answers[q.id]?.correct).length;
+  const shortScored = quiz.questions.filter(q => q.type === 'short' && quizState.answers[q.id]?.submitted);
+  const shortCorrect = shortScored.filter(q => quizState.answers[q.id]?.correct).length;
+  const allDone = quiz.questions.every(q => quizState.answers[q.id]?.submitted);
+
+  const footer = el('div', { class: 'quizFooter' });
+  const score = el('div', { class: 'quizFooter__score' });
+  if (allDone) {
+    score.appendChild(el('div', { class: 'quizFooter__scoreNum' }, `${autoCorrect}/${autoScored.length}`));
+    score.appendChild(el('div', { class: 'quizFooter__scoreLabel' }, 'auto-graded correct'));
+    if (shortScored.length) {
+      score.appendChild(el('div', { class: 'quizFooter__scoreSub' }, `+ ${shortCorrect}/${shortScored.length} short answers you marked as got-it`));
+    }
+  } else {
+    score.appendChild(el('div', { class: 'quizFooter__scoreLabel' }, `Answered: ${answered} / ${total}`));
+  }
+  footer.appendChild(score);
+  const btns = el('div', { class: 'quizFooter__actions' });
+  if (allDone) {
+    const retry = el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => { resetQuizState(quizState.moduleId); renderQuizModal(); } }, 'Retry');
+    const close = el('button', { class: 'btn btn--primary', type: 'button', onclick: () => closeQuizModal() }, 'Close');
+    btns.appendChild(retry);
+    btns.appendChild(close);
+  } else {
+    btns.appendChild(el('button', { class: 'btn btn--ghost', type: 'button', onclick: () => closeQuizModal() }, 'Close'));
+  }
+  footer.appendChild(btns);
+  body.appendChild(footer);
+}
+
+function openQuizModal(moduleId) {
+  resetQuizState(moduleId);
+  const overlay = $('#moduleQuizOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  renderQuizModal();
+}
+
+function closeQuizModal() {
+  const overlay = $('#moduleQuizOverlay');
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+
+function checkQuizAnswer(q, ans) {
+  if (q.type === 'mc' || q.type === 'tf') return ans.selected === q.correct;
+  if (q.type === 'short') {
+    const text = (ans.text || '').trim().toLowerCase();
+    return q.accepted.some(a => a.toLowerCase() === text);
+  }
+  return false;
+}
+
+// ---------- ACTIVE RECALL ----------
+// Map of deck id -> human title (for filename / download headers).
+const RECALL_DECK_TITLES = (() => {
+  const m = { all: 'Every unit' };
+  COURSE.forEach(cmod => { m[cmod.id] = `${cmod.code} ${cmod.title}`; });
+  m['cross-cutting'] = 'Cross-cutting';
+  return m;
+})();
+
+function recallCardsFor(deckId) {
+  const groups = glossaryByTopic();
+  if (deckId === 'all' || !deckId) {
+    return COURSE.flatMap(cmod => groups[cmod.id] || []);
+  }
+  return groups[deckId] || [];
+}
+
+function recallFilename(deckId, ext) {
+  const slug = (RECALL_DECK_TITLES[deckId] || deckId)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  return `macrow-${slug}.${ext}`;
+}
+
+// Quote a single CSV field per RFC 4180: wrap in double quotes if it
+// contains comma, double-quote, or newline; escape inner double-quotes by
+// doubling them.
+function csvField(v) {
+  const s = String(v == null ? '' : v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function recallToCsv(cards) {
+  const lines = ['term,definition,topic'];
+  cards.forEach(c => lines.push([csvField(c.term), csvField(c.definition), csvField(c.topic)].join(',')));
+  return lines.join('\n') + '\n';
+}
+
+function recallToTsv(cards) {
+  // Anki's preferred import format: tab-separated, no header.
+  const sanitize = (s) => String(s == null ? '' : s).replace(/[\t\r\n]+/g, ' ').trim();
+  return cards.map(c => `${sanitize(c.term)}\t${sanitize(c.definition)}`).join('\n') + '\n';
+}
+
+function recallToJson(cards) {
+  return JSON.stringify({
+    deck: currentRoute.params.deck || 'all',
+    generatedAt: new Date().toISOString(),
+    source: 'macrow.app',
+    cards: cards.map(c => ({ term: c.term, definition: c.definition, topic: c.topic })),
+  }, null, 2) + '\n';
+}
+
+function recallToMarkdown(cards) {
+  const lines = [`# macrow flashcards — ${RECALL_DECK_TITLES[currentRoute.params.deck || 'all'] || 'Deck'}`, ''];
+  cards.forEach((c, i) => {
+    lines.push(`## ${i + 1}. ${c.term}`, '', c.definition, '', `*Topic: ${topicTitle(c.topic)}*`, '', '---', '');
+  });
+  return lines.join('\n');
+}
+
+function downloadFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  showStatus(`Downloaded ${filename}`);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback: textarea + execCommand
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } finally { ta.remove(); }
+  return Promise.resolve();
+}
+
+function renderRecall() {
+  $('.view--recall').hidden = false;
+  const groups = glossaryByTopic();
+  const topicIds = COURSE.map(m => m.id);
+  const allKey = 'all';
+  const allCards = topicIds.flatMap(t => groups[t] || []);
+  const selected = currentRoute.params.deck || allKey;
+  // Sidebar list of decks
+  const list = $('#recallDeckList');
+  if (!list) return;
+  list.innerHTML = '';
+  const items = [{ topic: allKey, label: 'Every unit', count: allCards.length }];
+  topicIds.forEach(t => {
+    items.push({ topic: t, label: topicTitle(t), count: (groups[t] || []).length });
+  });
+  items.forEach(({ topic, label, count }) => {
+    const li = el('li', {
+      class: 'recallDeckList__item' + (selected === topic ? ' is-active' : ''),
+      role: 'button',
+      tabindex: '0',
+      'aria-current': selected === topic ? 'true' : 'false',
+      onclick: () => navigate('recall', { deck: topic }),
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('recall', { deck: topic }); } },
+    }, [
+      el('div', { class: 'recallDeckList__code' }, topic === allKey ? 'ALL' : topic),
+      el('div', { class: 'recallDeckList__body' }, [
+        el('div', { class: 'recallDeckList__title' }, label),
+        el('div', { class: 'recallDeckList__meta' }, `${count} card${count === 1 ? '' : 's'}`),
+      ]),
+    ]);
+    list.appendChild(li);
+  });
+
+  // Selected deck cards
+  const cards = selected === allKey ? allCards : (groups[selected] || []);
+  const eyebrow = selected === allKey ? 'Every unit' : topicTitle(selected);
+  const meta = selected === allKey
+    ? `${cards.length} cards across ${topicIds.length} units`
+    : `${cards.length} cards`;
+  $('#recallDeckEyebrow').textContent = eyebrow;
+  $('#recallDeckTitle').textContent = selected === allKey ? 'Every term, every unit' : eyebrow;
+  $('#recallDeckMeta').textContent = meta;
+  $('#recallPreviewCount').textContent = `${cards.length} card${cards.length === 1 ? '' : 's'}`;
+
+  // Preview
+  const preview = $('#recallPreview');
+  preview.innerHTML = '';
+  const showN = Math.min(cards.length, 8);
+  for (let i = 0; i < showN; i++) {
+    const c = cards[i];
+    const li = el('li', { class: 'recallPreview__item' }, [
+      el('div', { class: 'recallPreview__face recallPreview__face--front' }, [
+        el('span', { class: 'recallPreview__tag' }, c.topic),
+        el('span', { class: 'recallPreview__term' }, c.term),
+      ]),
+      el('div', { class: 'recallPreview__face recallPreview__face--back' }, c.definition),
+    ]);
+    preview.appendChild(li);
+  }
+  if (cards.length > showN) {
+    const more = el('li', { class: 'recallPreview__more' }, `+ ${cards.length - showN} more card${cards.length - showN === 1 ? '' : 's'} — download to see all.`);
+    preview.appendChild(more);
+  }
+  if (cards.length === 0) {
+    preview.appendChild(el('li', { class: 'recallPreview__empty' }, 'No cards in this deck yet.'));
+  }
+
+  // Enable / disable download buttons based on whether we have cards
+  const haveCards = cards.length > 0;
+  ['#recallDownloadCsv', '#recallDownloadTsv', '#recallDownloadJson', '#recallCopyMarkdown', '#recallOpenQuizlet'].forEach(sel => {
+    const btn = $(sel);
+    if (btn) {
+      btn.disabled = !haveCards;
+      btn.dataset.deck = selected;
+    }
+  });
+}
+
 // ---------- Shortcuts overlay ----------
 const SHORTCUTS = [
   { keys: ['g', 'h'], desc: 'Go to Home' },
@@ -976,11 +1385,53 @@ function wireGlobalEvents() {
   // Shortcuts
   $('#shortcutsClose')?.addEventListener('click', closeShortcuts);
   $('#btnOpenShortcuts')?.addEventListener('click', openShortcuts);
+
+  // Active Recall: download buttons
+  $('#btnStartModuleQuiz')?.addEventListener('click', () => {
+    if (currentRoute.params.moduleId) openQuizModal(currentRoute.params.moduleId);
+  });
+  $('#moduleQuizClose')?.addEventListener('click', closeQuizModal);
+  $('#moduleQuizOverlay')?.addEventListener('click', (e) => {
+    if (e.target.id === 'moduleQuizOverlay') closeQuizModal();
+  });
+
+  $('#recallDownloadCsv')?.addEventListener('click', () => {
+    const deck = $('#recallDownloadCsv').dataset.deck || 'all';
+    downloadFile(recallFilename(deck, 'csv'), recallToCsv(recallCardsFor(deck)), 'text/csv;charset=utf-8');
+  });
+  $('#recallDownloadTsv')?.addEventListener('click', () => {
+    const deck = $('#recallDownloadTsv').dataset.deck || 'all';
+    downloadFile(recallFilename(deck, 'tsv'), recallToTsv(recallCardsFor(deck)), 'text/tab-separated-values;charset=utf-8');
+  });
+  $('#recallDownloadJson')?.addEventListener('click', () => {
+    const deck = $('#recallDownloadJson').dataset.deck || 'all';
+    downloadFile(recallFilename(deck, 'json'), recallToJson(recallCardsFor(deck)), 'application/json');
+  });
+  $('#recallCopyMarkdown')?.addEventListener('click', async () => {
+    const deck = $('#recallCopyMarkdown').dataset.deck || 'all';
+    try {
+      await copyToClipboard(recallToMarkdown(recallCardsFor(deck)));
+      showStatus('Markdown copied to clipboard');
+    } catch (e) {
+      showStatus('Could not copy — see console for details', true);
+      console.error(e);
+    }
+  });
+  $('#recallOpenQuizlet')?.addEventListener('click', () => {
+    const deck = $('#recallOpenQuizlet').dataset.deck || 'all';
+    const title = RECALL_DECK_TITLES[deck] || deck;
+    showStatus(`Quizlet import for "${title}" — coming soon. We are wiring up deep links so you can drop this deck into a Quizlet folder in one click.`, false, 4000);
+  });
   // Keyboard
   let pendingG = false;
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select')) return;
     if (e.key === 'Escape') {
+      // Quiz overlay first
+      if ($('#moduleQuizOverlay') && !$('#moduleQuizOverlay').classList.contains('hidden')) {
+        closeQuizModal();
+        return;
+      }
       const overlay = $('.overlay:not(.hidden)');
       if (overlay) {
         const closeBtn = overlay.querySelector('.iconBtn[aria-label*="Close" i]');
@@ -1003,6 +1454,7 @@ function wireGlobalEvents() {
       else if (e.key === 'c' || e.key === 'C') navigate('course');
       else if (e.key === 's' || e.key === 'S') navigate('simulator');
       else if (e.key === 'g' || e.key === 'G') navigate('glossary');
+      else if (e.key === 'r' || e.key === 'R') navigate('recall');
     }
   });
 }
