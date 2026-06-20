@@ -432,17 +432,23 @@ body.sidebar-open { overflow: hidden; }
 .lessonListItem__status--current { background: var(--surface-3); color: var(--text); }
 
 /* ---------- Lesson view ---------- */
-.lessonMeta { display: flex; gap: 8px; margin: 0 0 24px; flex-wrap: wrap; }
+.lessonMeta { display: flex; gap: 8px; margin: 0 0 20px; flex-wrap: wrap; align-items: center; }
 .lessonMeta__chip {
-  display: inline-flex; align-items: center;
-  padding: 4px 12px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 12px; font-weight: 600;
   color: var(--text-2);
 }
+.lessonMeta__chip svg { color: var(--muted); }
 .lessonMeta__chip--muted { color: var(--muted); }
+.lessonMeta__chip--done {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
 
 .lessonBody { font-size: 16px; line-height: 1.7; color: var(--text); }
 .lessonBody p { margin: 0 0 16px; }
@@ -467,14 +473,31 @@ body.sidebar-open { overflow: hidden; }
 .formulaCallout__label { display: block; font-family: var(--font-sans); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; opacity: 0.75; }
 
 .diagramFrame {
-  margin: 28px 0;
-  padding: 18px;
+  margin: 32px 0 8px;
+  padding: 16px 20px 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column; align-items: stretch;
+  box-shadow: var(--shadow-sm);
 }
-.diagramSvg { display: block; max-width: 100%; height: auto; }
+.diagramImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: var(--radius);
+}
+.diagramFrame__caption {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+  text-align: left;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
 .diagramCaption { margin-top: 12px; font-size: 13px; color: var(--muted); text-align: center; max-width: 50ch; }
 
 .diagramSplit { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
