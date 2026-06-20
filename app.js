@@ -5,7 +5,7 @@ import { GRAPH, defaults, clamp, lerp, computeFromParams, AD, ASshape, equilibri
 import { buildScenarioUrl, parseScenarioPayloadFromUrl } from './js/scenario-share.js';
 import { storageGet, storageSet } from './js/local-storage.js';
 import { COURSE, GLOSSARY } from './js/course.js';
-import { DIAGRAMS } from './js/diagrams.js';
+import { getDiagram, DEFAULT_CAPTION } from './js/diagrams.js';
 
 // ---------- Tiny DOM helpers ----------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -325,9 +325,11 @@ function renderLessonView(moduleId, lessonId) {
   $('#lessonCrumbTitle').textContent = lesson.title;
   $('#lessonCode').textContent = lesson.id;
   $('#lessonTitle').textContent = lesson.title;
-  $('#lessonTime').textContent = `${lesson.minutes} min read`;
+  $('#lessonTime').innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> ${lesson.minutes} min read`;
   const done = isLessonCompleted(lesson.id);
-  $('#lessonStatus').textContent = done ? '✓ Completed' : 'Not yet completed';
+  const statusEl = $('#lessonStatus');
+  statusEl.textContent = done ? '✓ Completed' : '○ Not started';
+  statusEl.className = `lessonMeta__chip ${done ? 'lessonMeta__chip--done' : 'lessonMeta__chip--muted'}`;
   $('#lessonComplete').hidden = done;
   $('#lessonCompleted').hidden = !done;
   if (done) $('#lessonComplete').hidden = true, $('#lessonCompleted').hidden = false;
@@ -351,10 +353,24 @@ function renderLessonView(moduleId, lessonId) {
     ]));
   }
   // Diagram
-  if (lesson.diagram && DIAGRAMS[lesson.diagram]) {
-    const frame = el('div', { class: 'diagramFrame' });
-    body.appendChild(frame);
-    DIAGRAMS[lesson.diagram](frame);
+  if (lesson.diagram) {
+    const diag = getDiagram(lesson.diagram);
+    if (diag.src) {
+      const figure = el('figure', { class: 'diagramFrame' });
+      const img = el('img', {
+        class: 'diagramImg',
+        src: diag.src,
+        alt: diag.alt,
+        loading: 'lazy',
+        decoding: 'async',
+      });
+      figure.appendChild(img);
+      if (diag.caption && diag.caption !== DEFAULT_CAPTION) {
+        const cap = el('figcaption', { class: 'diagramFrame__caption' }, diag.caption);
+        figure.appendChild(cap);
+      }
+      body.appendChild(figure);
+    }
   }
 
   // Key terms
