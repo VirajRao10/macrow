@@ -64,8 +64,10 @@ const lessonTitle = (await page.locator('#lessonTitle').textContent()) || '';
 assert(lessonTitle.includes('aggregate demand curve'), `lesson title set (${lessonTitle})`);
 const bodyParas = await page.locator('.lessonBody p').count();
 assert(bodyParas > 0, 'lesson has body paragraphs');
-const diagramSvg = await page.locator('.lessonBody .diagramSvg').count();
-assert(diagramSvg > 0, 'lesson has diagram SVG');
+const diagramImg = await page.locator('.lessonBody .diagramImg').count();
+assert(diagramImg > 0, 'lesson has diagram image');
+const diagramCaption = await page.locator('.lessonBody .diagramFrame__caption').count();
+assert(diagramCaption > 0, 'lesson has diagram caption');
 const keyTerms = await page.locator('.keyTerm').count();
 assert(keyTerms > 0, 'lesson has key terms');
 
