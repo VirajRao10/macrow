@@ -17,7 +17,24 @@ export function computeFromParams(p){
 export const AD=(Y,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return GRAPH.adIntercept-GRAPH.adSlope*(Y-Y0)};
 export const invertAD_Y=(P,adShiftY)=>{const Y0=GRAPH.adPivotY+adShiftY; return Y0+(GRAPH.adIntercept-P)/GRAPH.adSlope};
 
-export function ASshape({asShiftP,yFe}){
+export const SRAS_VIEWS = { KEYNESIAN: 'keynesian', MONETARIST: 'monetarist' };
+
+export function ASshape({asShiftP,yFe,view=SRAS_VIEWS.KEYNESIAN}){
+  if (view === SRAS_VIEWS.MONETARIST) {
+    // Monetarist view: SRAS is a vertical line at Yf. Money is neutral in the
+    // long run, so output is determined by real factors and the price level
+    // adjusts freely. Demand-side policy moves only the price level; only
+    // supply-side policy can move Y itself.
+    const shiftedYFe = clamp(yFe, GRAPH.Ymin + 30, GRAPH.Ymax - 10);
+    const pts = [
+      [shiftedYFe, GRAPH.Pmin],
+      [shiftedYFe, GRAPH.Pmax - 6]
+    ];
+    return { pts, yKink: shiftedYFe, yFe: shiftedYFe, pFlat: GRAPH.Pmin, pEnd: GRAPH.Pmax - 6, view };
+  }
+  // Keynesian view: three-region SRAS (flat at low Y, upward-sloping in the
+  // middle, vertical near Yf). The middle uses a smooth exponential so it
+  // looks like a textbook curve rather than a polyline.
   const shiftedYFe=clamp(yFe,GRAPH.Ymin+30,GRAPH.Ymax-10);
   const pFlat=clamp(GRAPH.pFlat+asShiftP,GRAPH.Pmin+8,GRAPH.Pmax-GRAPH.curveRise-8);
   const yKink=clamp(shiftedYFe-GRAPH.kinkGap,GRAPH.Ymin+8,shiftedYFe-10);
@@ -28,10 +45,18 @@ export function ASshape({asShiftP,yFe}){
     pts.push([y,p]);
   }
   pts.push([shiftedYFe,pEnd],[shiftedYFe,GRAPH.Pmax-6]);
-  return {pts,yKink,yFe:shiftedYFe,pFlat,pEnd};
+  return {pts,yKink,yFe:shiftedYFe,pFlat,pEnd,view};
 }
 
 export function equilibrium(v){
+  const view = v.view || SRAS_VIEWS.KEYNESIAN;
+  if (view === SRAS_VIEWS.MONETARIST) {
+    // Monetarist: Y is fixed at Yf, P is whatever AD says at that point.
+    const as = ASshape(v);
+    const y = as.yFe;
+    const p = clamp(AD(y, v.adShiftY), GRAPH.Pmin, GRAPH.Pmax - 6);
+    return { y, p };
+  }
   const as=ASshape(v);
   const asP=Y=>Y<=as.yKink
     ? as.pFlat
@@ -76,18 +101,10 @@ export const adLineSegment=adShiftY=>{
   return {m,b,seg:clipLineToBox(m,b,GRAPH)};
 };
 
-// Returns two stroke-friendly line segments approximating the SRAS shape
-// (flat horizontal portion + vertical portion at the kink). Used by
-// long-run equilibrium and other diagrams that want to draw the SRAS as
-// a piecewise linear line rather than the full Catmull-Rom curve.
-export const asLineSegments=(asShiftP,yFe)=>{
-  const as=ASshape({asShiftP:asShiftP||0,yFe:yFe});
-  return {
-    yKink:as.yKink,
-    pFlat:as.pFlat,
-    yFe:as.yFe,
-    pEnd:as.pEnd,
-    seg1:[[GRAPH.Ymin,as.pFlat],[as.yKink,as.pFlat]],
-    seg2:[[as.yFe,as.pEnd],[as.yFe,GRAPH.Pmax-6]]
-  };
+// Returns a polyline approximating the full SRAS shape (flat at low Y,
+// upward-sloping in the middle, vertical at Yf). Used by the live chart
+// to draw the curve as a single smooth stroke rather than two segments.
+export const asPolyline=({asShiftP=0,yFe,view=SRAS_VIEWS.KEYNESIAN}={})=>{
+  const as=ASshape({asShiftP,yFe,view});
+  return { pts: as.pts, yKink: as.yKink, pFlat: as.pFlat, yFe: as.yFe, pEnd: as.pEnd, view };
 };

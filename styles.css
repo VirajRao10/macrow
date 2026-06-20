@@ -677,6 +677,38 @@ html[data-theme="dark"] .stateLabel[data-state="inflationary"] { background: rgb
 
 .chartControls { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center; }
 
+.viewToggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.viewToggle__btn {
+  background: transparent;
+  border: 0;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.viewToggle__btn:hover { color: var(--text); background: var(--bg-2, rgba(0,0,0,0.03)); }
+.viewToggle__btn.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+.viewToggle__btn + .viewToggle__btn { border-left: 1px solid var(--border); }
+.viewToggle__btn.is-active + .viewToggle__btn,
+.viewToggle__btn + .viewToggle__btn.is-active { border-left-color: var(--accent); }
+
+#viewLabel { color: var(--accent); font-weight: 600; }
+
+.stateLabel[data-state="monetarist"] { color: var(--accent); }
+
 .quickActions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .actionCard {
   text-align: left;

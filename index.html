@@ -233,7 +233,7 @@
             <div class="cardHeader">
               <div>
                 <div class="cardTitle">AD–AS diagram</div>
-                <div class="cardSubtitle">Live simulator</div>
+                <div class="cardSubtitle">Live simulator · <span id="viewLabel">Keynesian view</span></div>
               </div>
               <div class="legend">
                 <div class="legendItem"><span class="dot dot--ad"></span><span>AD</span></div>
@@ -255,6 +255,10 @@
                 <div class="eqSummary__stat"><div class="eqSummary__label">Potential output (Yf)</div><div class="eqSummary__value" id="statPotentialValue">—</div><div class="eqSummary__delta" id="statPotentialDelta">Δ —</div></div>
               </div>
               <div class="chartControls">
+                <div class="viewToggle" role="group" aria-label="SRAS view">
+                  <button type="button" class="viewToggle__btn is-active" data-view="keynesian" id="viewKeynesian">Keynesian</button>
+                  <button type="button" class="viewToggle__btn" data-view="monetarist" id="viewMonetarist">Monetarist</button>
+                </div>
                 <label class="toggle"><input id="toggleAxisNumbers" type="checkbox" checked /><span>Axis numbers</span></label>
                 <button id="btnExportPng" class="btn btn--ghost btn--mini">Export PNG</button>
                 <button id="btnExportSvg" class="btn btn--ghost btn--mini">Export SVG</button>
